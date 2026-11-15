@@ -1,0 +1,262 @@
+{
+  "scope": "P2-B-R1 public DTO retention fix; selected no-database tests only; pending independent human review",
+  "started_at": "2026-11-15T19:09:20.811998+08:00",
+  "timezone": "Asia/Taipei",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "tools": {
+    "pytest": "9.2.0",
+    "mypy": "1.20.2",
+    "ruff": "0.17.5"
+  },
+  "git_branch": "feature/phase-1-foundation",
+  "git_head": null,
+  "git_head_note": "No commits exist; HEAD cannot be resolved",
+  "git_status_before": "## No commits yet on feature/phase-1-foundation\n?? .dockerignore\n?? .env.example\n?? .github/\n?? .gitignore\n?? API_SPEC.md\n?? DATABASE.md\n?? GAME_RULES.md\n?? PRD.md\n?? README.md\n?? SECURITY.md\n?? TASKS.md\n?? backend/\n?? compose.yaml\n?? docs/\n?? frontend/\n?? infra/\n?? scripts/\n",
+  "environment_overrides": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"
+  },
+  "original_p2b_evidence": {
+    "path": "docs/reports/P2_B_TEST_EVIDENCE.json",
+    "sha256": "07d214ddf1f6a6a4f034ead576370aa9c51e1d5b44656162f3340191a9528fd8"
+  },
+  "pre_patch_reproduction": {
+    "retained_player_class": "PlayerWithHand",
+    "asdict_included_hand": true,
+    "repr_included_hand": true
+  },
+  "decision": "Reject exact public model type mismatches, without implicit field conversion or new serializers",
+  "source_sha256_before": {
+    "backend/app/games/core/__init__.py": "457e03b510cc601271c8eef969ee6f609d3bdca9e9399c857aa8a3bf0be083f6",
+    "backend/app/games/core/card.py": "1c23d6e028638833a7d06fff4a152b621ab72e68733904aa586a535bbbb8b67b",
+    "backend/app/games/core/deck.py": "c40a1cb60dfe909f7a6e0403fcedb025137b78fae2706776ca096f837c1d4c56",
+    "backend/app/games/core/models.py": "3143fcab9378363870d352edf04739c4ecd47bb1346ecc8f1e0a8b7501655800",
+    "backend/migrations/versions/0001_game_types.py": "b8e742362dc6a8852c9b6231483817876900a1e46cceb8c3e67bc327a599d2fb",
+    "backend/pyproject.toml": "d0b784adb215d520a99dd27e077d44d5ab3272cadeaa3cb3322f9b1885fd5c1e",
+    "backend/tests/games/test_card.py": "df64e3602898e8c65f76f1032897b7503a34309e1a1a8ed5c5f49cc5f8858f88",
+    "backend/tests/games/test_deck.py": "81424d166f87a6a0132055d3959ba0c7c71f70757d417ffd32203d799e531fd4",
+    "backend/tests/games/test_models.py": "ff1cbaeb1da5a927c36d50432a70c0a9188aafbfac9786d155382952b7c8f8e4",
+    "backend/tests/games/test_public_isolation.py": "1687c2c7a4401eb34b787d470f6e0eb05c357180db287051302db66918ead0a9",
+    "backend/tests/test_health.py": "a76d71f603d52b9664b927990c98b2146a206668b672383cc1a73c1c6809f4cc"
+  },
+  "checks": [
+    {
+      "label": "R1 public isolation",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_public_isolation.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T19:09:21.097784+08:00",
+      "finished_at": "2026-11-15T19:09:22.138080+08:00",
+      "elapsed_seconds": 1.033,
+      "exit_code": 0,
+      "stdout": "...................                                                      [100%]\n19 passed in 0.08s\n",
+      "stderr": "",
+      "counts": {
+        "passed": 19,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "label": "Original P2-B regression",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_models.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T19:09:22.138080+08:00",
+      "finished_at": "2026-11-15T19:09:24.497992+08:00",
+      "elapsed_seconds": 2.366,
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 58%]\n....................................................                     [100%]\n124 passed in 1.42s\n",
+      "stderr": "",
+      "counts": {
+        "passed": 124,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "label": "Original P2-A regression",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_card.py",
+        "backend/tests/games/test_deck.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T19:09:24.497992+08:00",
+      "finished_at": "2026-11-15T19:09:25.589164+08:00",
+      "elapsed_seconds": 1.091,
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 56%]\n.......................................................                  [100%]\n127 passed in 0.16s\n",
+      "stderr": "",
+      "counts": {
+        "passed": 127,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "label": "Phase 1 no-database health",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/test_health.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T19:09:25.589164+08:00",
+      "finished_at": "2026-11-15T19:09:28.818396+08:00",
+      "elapsed_seconds": 3.222,
+      "exit_code": 0,
+      "stdout": "...                                                                      [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\github\\Poker-Club\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 2.21s\n",
+      "stderr": "",
+      "counts": {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "label": "Mypy",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "mypy",
+        "--no-incremental",
+        "backend/app",
+        "backend/tests"
+      ],
+      "started_at": "2026-11-15T19:09:28.818396+08:00",
+      "finished_at": "2026-11-15T19:09:54.378963+08:00",
+      "elapsed_seconds": 25.56,
+      "exit_code": 0,
+      "stdout": "Success: no issues found in 22 source files\n",
+      "stderr": ""
+    },
+    {
+      "label": "Ruff",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "ruff",
+        "check",
+        "--no-cache",
+        "backend",
+        "scripts"
+      ],
+      "started_at": "2026-11-15T19:09:54.378963+08:00",
+      "finished_at": "2026-11-15T19:09:54.616206+08:00",
+      "elapsed_seconds": 0.242,
+      "exit_code": 0,
+      "stdout": "All checks passed!\n",
+      "stderr": ""
+    },
+    {
+      "label": "Ruff format",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "--no-cache",
+        "backend",
+        "scripts"
+      ],
+      "started_at": "2026-11-15T19:09:54.616206+08:00",
+      "finished_at": "2026-11-15T19:09:54.854046+08:00",
+      "elapsed_seconds": 0.237,
+      "exit_code": 0,
+      "stdout": "28 files already formatted\n",
+      "stderr": ""
+    },
+    {
+      "label": "Dependency consistency",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "started_at": "2026-11-15T19:09:54.854046+08:00",
+      "finished_at": "2026-11-15T19:09:59.824881+08:00",
+      "elapsed_seconds": 4.969,
+      "exit_code": 0,
+      "stdout": "No broken requirements found.\n",
+      "stderr": ""
+    }
+  ],
+  "not_executed": [
+    "SQLite migration test",
+    "Five PostgreSQL tests",
+    "Native PostgreSQL lifecycle",
+    "Docker/Nginx acceptance",
+    "Frontend/Playwright",
+    "Formal player-view authorization",
+    "P2-C through P2-F"
+  ],
+  "open_risks": [
+    "P2-A reset RNG failure",
+    "P2-A test-only production isolation",
+    "P2-A arbitrary Python/frozen trust limits",
+    "Historical full-regression version traceability",
+    "Game legality/lifecycle/cross-card invariants",
+    "Authentication and per-player projection"
+  ],
+  "source_sha256_after": {
+    "backend/app/games/core/__init__.py": "457e03b510cc601271c8eef969ee6f609d3bdca9e9399c857aa8a3bf0be083f6",
+    "backend/app/games/core/card.py": "1c23d6e028638833a7d06fff4a152b621ab72e68733904aa586a535bbbb8b67b",
+    "backend/app/games/core/deck.py": "c40a1cb60dfe909f7a6e0403fcedb025137b78fae2706776ca096f837c1d4c56",
+    "backend/app/games/core/models.py": "3143fcab9378363870d352edf04739c4ecd47bb1346ecc8f1e0a8b7501655800",
+    "backend/migrations/versions/0001_game_types.py": "b8e742362dc6a8852c9b6231483817876900a1e46cceb8c3e67bc327a599d2fb",
+    "backend/pyproject.toml": "d0b784adb215d520a99dd27e077d44d5ab3272cadeaa3cb3322f9b1885fd5c1e",
+    "backend/tests/games/test_card.py": "df64e3602898e8c65f76f1032897b7503a34309e1a1a8ed5c5f49cc5f8858f88",
+    "backend/tests/games/test_deck.py": "81424d166f87a6a0132055d3959ba0c7c71f70757d417ffd32203d799e531fd4",
+    "backend/tests/games/test_models.py": "ff1cbaeb1da5a927c36d50432a70c0a9188aafbfac9786d155382952b7c8f8e4",
+    "backend/tests/games/test_public_isolation.py": "1687c2c7a4401eb34b787d470f6e0eb05c357180db287051302db66918ead0a9",
+    "backend/tests/test_health.py": "a76d71f603d52b9664b927990c98b2146a206668b672383cc1a73c1c6809f4cc"
+  },
+  "source_unchanged_during_checks": true,
+  "original_evidence_preserved": true,
+  "protected_files_match_original_p2b_evidence": {
+    "backend/app/games/core/card.py": true,
+    "backend/app/games/core/deck.py": true,
+    "backend/migrations/versions/0001_game_types.py": true,
+    "backend/tests/games/test_models.py": true,
+    "backend/tests/games/test_card.py": true,
+    "backend/tests/games/test_deck.py": true
+  },
+  "test_totals": {
+    "passed": 273,
+    "failed": 0,
+    "skipped": 0
+  },
+  "finished_at": "2026-11-15T19:09:59.824881+08:00",
+  "all_selected_checks_passed": true
+}

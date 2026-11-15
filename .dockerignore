@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.local-tools
+.local-data
+**/node_modules
+**/dist
+**/__pycache__
+**/test-results
+**/playwright-report
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache

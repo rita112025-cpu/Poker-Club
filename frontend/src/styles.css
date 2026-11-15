@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root { font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; color-scheme: dark; background: #0b1311; }
+body { margin: 0; background: radial-gradient(ellipse at 75% 40%, #19342a55, transparent 60%); }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:disabled { cursor: wait; }
+.brand { display: flex; align-items: center; gap: 12px; color: #e6cc8a; text-decoration: none; font-family: Georgia, serif; font-size: 25px; }
+.brand span { font-size: 15px; letter-spacing: 3px; }
+.table-scene { min-width: 0; }
+.felt-table { position: relative; height: 350px; border-radius: 45%; border: 14px solid #382c20; outline: 2px solid #a7894c; box-shadow: 0 30px 60px #0009, inset 0 0 0 3px #a7894c88, inset 0 0 65px #0009; background: repeating-radial-gradient(circle at 50% 20%, #ffffff05 0 1px, transparent 1px 4px), radial-gradient(ellipse, #196147, #0b3628); }
+.table-wordmark { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); color: #c8b87966; letter-spacing: 5px; font: 16px Georgia, serif; white-space: nowrap; }
+.playing-card { position: absolute; top: 35%; left: 43%; width: 100px; height: 144px; border-radius: 8px; box-shadow: 2px 9px 18px #0007; }
+.card-back { background: repeating-linear-gradient(45deg, #17324d 0 3px, #2e4b68 3px 5px); border: 6px solid #e8e1d0; color: #d7c59b; text-align: center; padding-top: 42px; transform: translateX(-48px) rotate(-18deg); font-size: 32px; }
+.card-front { color: #17201d; background: linear-gradient(120deg, #fffefa, #dedbcc); padding: 8px; transform: rotate(12deg); }
+.card-front span { font: bold 20px/19px Georgia, serif; }
+.card-front strong { position: absolute; top: 42px; left: 27px; font: 60px Georgia, serif; }
+.card-bottom { position: absolute; right: 8px; bottom: 8px; transform: rotate(180deg); }
+.chip { position: absolute; width: 46px; height: 46px; border-radius: 50%; border: 6px dashed #e9dcbb; box-shadow: 0 5px 0 #392922, 0 9px 12px #0007, inset 0 0 0 2px #eeddbb88; }
+.chip-one { left: 66%; top: 68%; background: #972e31; }
+.chip-two { left: 72%; top: 62%; background: #1d385e; }
+.chip-three { left: 66%; top: 60%; background: #972e31; }
+@media (max-width: 480px) { .felt-table { height: 270px; border-width: 10px; } .brand span { font-size: 12px; letter-spacing: 2px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
