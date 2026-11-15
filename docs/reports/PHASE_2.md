@@ -1,5 +1,128 @@
 # Phase 2 進度報告
 
+## P2-E 正式結案決議 — CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P2-E = **CONDITIONAL PASS**，核准**德州五張牌型階段**結案。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 P2-F，未做任何 Git 寫入。
+
+### 驗收範圍與獨立複驗結果
+
+- 範圍：`texas_holdem/hands.py`（`HandCategory`、`HandRank`、`evaluate_five`、`compare`）與其測試；僅限五張。
+- 獨立複驗：core 全部模組、migration、舊測試與 B／R1／R2／C／D 證據相對 HEAD 無差異；
+  P2-E 證據 20 個來源雜湊、四份舊證據雜湊與 13 項檢查退出碼皆吻合。
+- Backend：**413 passed、5 skipped**（361＋52）；5 項 PostgreSQL 測試**尚未驗證通過**。Mypy、Ruff、格式檢查通過。
+- 獨立驗證：與實作不同寫法的參考比較器對 15 萬組隨機兩手牌比較，0 項不一致；
+  重做列舉的各牌型不同強度為 10／156／156／1277／10／858／858／2860／1277，合計 7462，與公認數字相符。
+- 副本變異 20 種：18 種被抓到，其餘 2 種為等價變異。
+- 歷史紀錄與各階段證據皆保留，未覆寫。
+
+### 保留條件
+
+1. **`HandRank` 可被直接建構出語意不可能的牌力**：只驗證型別、值範圍 2～14 與長度；
+   順子 `(2,)`、葫蘆 `(5,5)`、同花 `(2,3,4,5,6)`、同花順 `(3,)`、同花 `(9,9,9,9,9)` 皆被接受。
+   `HandRank` 僅在由 `evaluate_five` 產生時可信；若日後接收外部傳來的 `HandRank`，須先加語意驗證或限制建構來源。
+2. **規則採標準德州假設**：規格未逐項定義比較鍵、wheel 與皇家同花順；獨立驗證證明實作與標準規則一致，
+   不證明規格要求的就是標準規則，仍須人工確認無地方規則。
+3. **完整窮舉不在測試套件內**：僅記錄於證據檔 `manual_exhaustive_check` 的一次性結果（約 38 秒），無法在 CI 重現；
+   日常測試只含組合數 oracle 與固定種子抽樣。
+4. **牌力結果具敏感性**：只能在伺服器內部使用，目前沒有機制防止其進入公開資料或日誌，僅靠文件約束。
+5. 沿用 P2-B～P2-D 保留條件：僅建構時驗證；真實引擎前須先建立共用契約測試套件。
+
+### P2-A 持續開放事項（仍未完成）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險。
+- [ ] test-only Deck 與正式引擎的隔離。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口。
+
+### 尚未驗收（P2-E 通過不代表已完成）
+
+- 七選五、平分池與餘數、結算（P3-04）。
+- 大老二、十三支、五張抽牌的牌型。
+- 真實遊戲引擎與正式發牌；共用契約測試套件；Registry 目前實際為空。
+- 正式認證與授權、玩家資料投影、私有資訊投影契約（P2-F）。
+- Phase 2 整體驗收（P2-F）；PostgreSQL 測試（5 項 skipped）。
+
+---
+
+## P2-E 德州五張牌型辨識 — 已人工驗收（見上方結案決議）
+
+日期：2026-11-15（Asia/Taipei）。依盤點報告「照建議」實作。
+只做德州**五張**牌型純函式；未做七選五、結算、下注、大老二、十三支、五張抽牌；未接 Registry 或引擎；
+未開始 P2-F；未修改 Card／Deck／core 模組／migration；未 commit。
+
+### 採用的決策（對應盤點第 6 節）
+
+1. 只做五張；七選五留 P3-04。
+2. 比較鍵採標準德州規則（規格未逐項定義，已列為需人工確認的假設）。
+3. wheel 為 5 高順子；A 只在 A2345 為低牌；不允許環繞（QKA23、JQKA2 非順子）。
+4. 皇家同花順＝A 高同花順，不另設牌型。
+5. 花色只決定是否為同花／同花順，同牌型比較完全不看花色。
+6. 輸出僅 `HandRank(category, tiebreak)`，平手為 `compare == 0`；不附選中的牌。
+
+### 介面
+
+位置 `backend/app/games/texas_holdem/hands.py`：
+
+- `HandCategory`（九種）、`HandRank`（精確型別驗證：category、tiebreak 為精確 int tuple、值 2～14、長度與牌型相符）。
+- `evaluate_five(cards)`：只接受精確 `tuple` 的 5 張精確 `Card`、無重複；錯誤輸入拋例外（程式錯誤）。
+- `compare(a, b)`：回傳 -1／0／1，只接受精確 `HandRank`。
+- 強度與點數值使用明確對照表，不依賴 `Rank`／`Suit`／`HandCategory` 宣告順序。
+- 靜態只依賴 `app.games.core.card`（以 AST 測試驗證）；執行期因套件 `__init__` 會載入整個 `core`。
+
+牌型與比較鍵：同花順(高牌)、鐵支(四條, 踢腳)、葫蘆(三條, 一對)、同花(五張降序)、順子(高牌)、
+三條(三條, 兩踢腳)、兩對(大對, 小對, 踢腳)、一對(對子, 三踢腳)、高牌(五張降序)。
+
+### 修改檔案
+
+- 新增：`backend/app/games/texas_holdem/__init__.py`、`hands.py`、`backend/tests/games/test_texas_hands.py`、`docs/reports/P2_E_TEST_EVIDENCE.json`。
+- 修改：`TASKS.md`、本檔。其他程式與證據未改。
+
+### 新增測試（52 項）與獨立 oracle
+
+九種牌型 15 個案例的類別與比較鍵、無環繞、26 手代表牌的嚴格全序、六組跨花色平手、輸入牌序與花色置換不變（含全部 120 種排列與 24 種花色置換）、
+張數錯誤、容器子類別／list／字串／iterator、`Card` 子類別與非 Card 元素、重複牌、`HandRank` 欄位驗證、結果不可變、
+`compare` 型別檢查、強度與宣告順序無關、AST 依賴檢查。
+
+Oracle（不重跑整個牌空間、以組合數推導）：以點數多重集合列舉並用組合數計權重，驗證各牌型數量
+40／624／3,744／5,108／10,200／54,912／123,552／1,098,240／1,302,540，總數 2,598,960，不同強度 7,462；
+另以固定種子抽 20,000 手具體牌，驗證與同點數多重集合的代表牌結果一致。
+**另做一次性的完整窮舉**（不在測試套件內，約 38 秒）：枚舉全部 2,598,960 手，各牌型數量與 7,462 皆與公認數字相符，結果記錄於證據檔 `manual_exhaustive_check`。
+窮舉耗時過長，未納入日常測試（盤點報告原本建議納入，此為差異）。
+
+變異測試（副本上 20 種）：18 種被抓到；另 2 種（`ordered[:4]`、`ordered[:3]` 切片）為**等價變異**
+（該陣列長度本來就是 4 與 3，改動不改變行為），不是測試缺口。
+
+### 實際結果
+
+環境：3.12.10，Windows-11-10.0.26300-SP0，PYTHONDONTWRITEBYTECODE=1、PYTEST_DISABLE_PLUGIN_AUTOLOAD=1。
+- P2-E texas hands：exit 0；52 passed in 1.19s
+- P2-D registry：exit 0；34 passed in 0.13s
+- P2-C engine contract：exit 0；28 passed in 0.14s
+- R2 public field matrix：exit 0；25 passed in 0.09s
+- R1 public isolation：exit 0；19 passed in 0.10s
+- Original P2-B regression：exit 0；124 passed in 2.16s
+- P2-A regression：exit 0；127 passed in 0.19s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.86s
+- Mypy：exit 0；Success: no issues found in 27 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；34 files already formatted
+- Full backend suite：exit 0；413 passed, 5 skipped, 1 warning in 5.06s
+- pip check：exit 0；No broken requirements found.
+
+證據檔 `P2_E_TEST_EVIDENCE.json`；`hands.py` SHA-256 `dfde66c70ff8f6a233cf2dfa0d5e9c96eaa99f7a0e32abd48ce6aa3ce6be72f3`；`test_texas_hands.py` `d19af162f46ac4fd8c5bd169e7bcba685ab38ea2e5c6a7ceb3c2ddbed3f79f68`。
+B／R1／R2／C／D 證據未覆寫。
+
+### 尚未解決的限制
+
+- 規格未逐項定義比較鍵、wheel 細節與皇家同花順：目前採標準德州規則，仍需人工確認這是預期，而非另有地方規則。
+- 只處理五張；七選五、平分池與餘數、結算屬 P3-04。
+- 結果揭露牌力，僅限伺服器內部使用，不得進入公開資料或日誌。
+- P2-A 四項風險、P2-C 共用契約測試套件、P2-D Registry 尚無真實引擎、PostgreSQL 5 項測試皆未解決。
+- 正式發牌、玩家投影與認證仍未驗收。P2-E 是否結案須人工獨立驗收。
+
+---
+
 ## P2-D 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P2-D = **CONDITIONAL PASS**，核准 **Registry 機制階段**結案。
