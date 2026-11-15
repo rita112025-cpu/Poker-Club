@@ -23,9 +23,9 @@
 持續限制：不安裝 Docker Desktop、不啟用 WSL、不改 Windows 設定；
 不 commit/push/merge/rebase、不建立 PR、不改 Git 身分。
 P2-A 驗收為 CONDITIONAL PASS；P2-B 經 R2 修補與人工驗收為 CONDITIONAL PASS，核准純型別階段結案
-（保留條件見 `docs/reports/PHASE_2.md`）。P2-C～P2-F 尚未開始，須使用者另行授權。
+（保留條件見 `docs/reports/PHASE_2.md`）。P2-C 契約階段已結案；P2-D～P2-F 尚未開始，須使用者另行授權。
 
-## Phase 2 — 共用核心（P2-B 純型別階段已結案；P2-C 以後待授權）
+## Phase 2 — 共用核心（P2-B、P2-C 已結案；P2-D 以後待授權）
 
 - [x] P2-01（P2-A）Card／Rank／Suit 值型別；驗收 52 張唯一牌、序列化往返、拒絕非法牌。
 - [x] P2-02（P2-A）Deck／安全 Shuffle／發牌／剩餘數／重置；固定牌序注入有 test-only 標記。
@@ -42,7 +42,7 @@ P2-A 驗收為 CONDITIONAL PASS；P2-B 經 R2 修補與人工驗收為 CONDITION
 - [x] P2-A-03 核心 127 項測試；含 Phase 1 的完整回歸 136 passed／0 skipped；Mypy／Ruff 通過。
 - [x] P2-A-04 新增 `docs/reports/PHASE_2.md`，交付後停止，等待人工驗收。
 - [x] P2-B：純型別契約結案（人工驗收 CONDITIONAL PASS，經 R1／R2 修補；歷史 FAIL 紀錄保留）。不含正式認證、玩家投影、遊戲引擎或正式發牌。
-- [ ] P2-C（僅規劃；P2-04 前半）：六方法引擎 Protocol，先固定輸入輸出及錯誤契約。
+- [x] P2-C：六方法引擎 Protocol、結果型別、牌組來源規則與契約測試；人工驗收 CONDITIONAL PASS，契約階段結案（保留條件見 PHASE_2.md）。不含真實引擎、玩家投影、認證或正式發牌。
 - [ ] P2-D（僅規劃；P2-04 後半）：Registry、重複／未知引擎錯誤與停用遊戲防護。
 - [ ] P2-E（僅規劃；P2-05）：純牌型辨識與比較，不包含下注狀態機。
 - [ ] P2-F（僅規劃；P2-06／07）：私有資訊投影、十三支擴充契約及 Phase 2 整體驗收。
@@ -80,6 +80,15 @@ P2-03 整體尚未完成：本輪沒有獨立 Room／GameSession／GameEvent／G
 - [x] P2-B-R2-03 新增 25 項對抗測試；R2 25／R1 19／P2-B 124／P2-A 127／健康檢查 3 合計 298 passed；Mypy／Ruff／format／pip check 通過。
 - [x] P2-B-R2-04 `P2_B_R2_TEST_EVIDENCE.json` 與 PHASE_2 報告完成；R1／原始證據未覆寫。
 - [x] P2-B-R2-05 人工獨立複驗完成；決議 CONDITIONAL PASS，核准 P2-B 純型別階段結案（保留條件見 PHASE_2.md）。
+
+### P2-C 六方法 GameEngine Protocol
+
+- [x] P2-C-01 規劃與 6 項決策確認（照建議）。
+- [x] P2-C-02 `engine_types.py` 新結果／事件型別，精確型別驗證。
+- [x] P2-C-03 `engine.py` Protocol 與 `require_production_deck`。
+- [x] P2-C-04 28 項契約測試；完整 backend 327 passed、5 skipped；Mypy／Ruff／format／pip check 通過。
+- [x] P2-C-05 `P2_C_TEST_EVIDENCE.json` 與 PHASE_2 報告完成；停止等待人工驗收。
+- [x] P2-C-06 人工獨立複驗完成；決議 CONDITIONAL PASS，核准 P2-C 契約階段結案（保留條件見 PHASE_2.md）。
 
 ## Phase 3 — 德州撲克
 

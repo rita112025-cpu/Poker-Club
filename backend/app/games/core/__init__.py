@@ -2,6 +2,20 @@
 
 from app.games.core.card import Card, Rank, Suit
 from app.games.core.deck import Deck, InsufficientCardsError
+from app.games.core.engine import (
+    GameEngine,
+    TestOnlyDeckError,
+    require_production_deck,
+)
+from app.games.core.engine_types import (
+    ActionValidation,
+    ApplyResult,
+    EventVisibility,
+    GameConfig,
+    GameEvent,
+    GameResult,
+    PlayerResult,
+)
 from app.games.core.models import (
     GameAction,
     GameError,
@@ -17,6 +31,16 @@ from app.games.core.models import (
 )
 
 __all__ = [
+    "ActionValidation",
+    "ApplyResult",
+    "EventVisibility",
+    "GameConfig",
+    "GameEngine",
+    "GameEvent",
+    "GameResult",
+    "PlayerResult",
+    "TestOnlyDeckError",
+    "require_production_deck",
     "Card",
     "Deck",
     "GameAction",

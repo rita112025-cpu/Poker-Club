@@ -50,5 +50,5 @@
 
 P2-A 的亂數失敗後 reset 風險、test-only 正式隔離、Python frozen 信任限制及完整回歸
 版本追溯缺口仍保持開放。P2-B 沒有修正或取代這些防護。
-Room／GameSession／GameEvent／GameResult 的獨立型別、六方法 Protocol、Registry、
-牌型判斷或任何遊戲仍未實作；後續順序見 TASKS 與 Phase 2 進度報告。
+P2-C 已加入六方法 `GameEngine` Protocol、`GameEvent`／`GameResult` 等結果型別與牌組來源規則（待驗收）；
+Room／GameSession 型別、Registry、牌型判斷或任何遊戲仍未實作；後續順序見 TASKS 與 Phase 2 進度報告。

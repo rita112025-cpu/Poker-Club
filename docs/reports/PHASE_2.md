@@ -1,5 +1,124 @@
 # Phase 2 進度報告
 
+## P2-C 正式結案決議 — CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P2-C = **CONDITIONAL PASS**，核准**契約階段**結案。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 P2-D～P2-F，未做任何 Git 寫入。
+
+### 驗收範圍與獨立複驗結果
+
+- 範圍：`engine.py`（GameEngine Protocol、`require_production_deck`）、`engine_types.py`（結果與事件型別）及其契約測試。
+- 獨立複驗：`models.py`、Card、Deck、migration 與 R1／R2／原始證據相對 commit 無差異；P2-C 證據 15 個來源雜湊與 11 項檢查退出碼皆吻合。
+- Backend：**327 passed、5 skipped**（共 332）；5 項 PostgreSQL 相關測試**尚未驗證通過**。
+- 對抗驗證：副本上 14 種變異（移除 test-only／完整牌組／序號連續／收件人／守恆／重複 id／精確型別等檢查）全部被測試抓到；
+  mypy strict 能拒絕缺方法或回傳型別錯誤的引擎；兩個新模組未匯入 fastapi／sqlalchemy 等框架。
+- 歷史紀錄與 R1／R2／P2-C 證據皆保留，未覆寫。
+
+### 保留條件
+
+1. **契約僅在型別層強制**：Protocol 無執行期檢查；「version＋1」「視圖不含他人牌」只由測試專用 stub 示範。
+   真實引擎開始前須建立可重用的共用契約測試套件，否則不得視為已遵守契約。
+2. **部分不變式無法由型別驗證**：`ApplyResult` 不知前一狀態、無法驗證版本遞增；`GameResult` 不驗證玩家屬於該局；
+   `GameConfig.game_type` 不與 `GameState.game_type` 核對；名次允許並列。
+3. **`require_production_deck` 只防誤用**：只檢查進入時狀態；引擎若未抽空牌組，同一副牌可跨局重用；
+   test-only 旗標可被同程序程式碼改寫（屬 P2-A 開放風險）。
+4. **事件沒有 payload**：私有事件的可見性隔離僅在中繼資料層，實際 payload 的保密留待真實引擎。
+5. **測試較弱處**：視圖不洩漏測試為公開資料文字的牌面碼字串比對，不是結構性證明。
+6. 沿用 P2-B 信任限制（僅建構時驗證；copy／pickle／反射不重驗）。
+
+### P2-A 持續開放事項（仍未完成）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險。
+- [ ] test-only Deck 與正式引擎的隔離。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口。
+
+### 尚未驗收（P2-C 通過不代表已完成）
+
+- 真實遊戲引擎與正式發牌。
+- 正式認證與授權。
+- 玩家資料投影（`get_player_view` 目前僅有契約與 stub 示範）。
+- Registry（P2-D）、牌型辨識（P2-E）、Phase 2 整體驗收（P2-F）。
+- PostgreSQL 測試（5 項 skipped）。
+
+---
+
+## P2-C 六方法 GameEngine Protocol — 已人工驗收（見上方結案決議）
+
+日期：2026-11-15（Asia/Taipei）。依 6 項規劃決策（照建議）實作契約層。
+只建立 Protocol、結果型別、牌組來源規則與契約測試；**未**實作任何真實遊戲、Registry、牌型辨識、
+玩家投影、認證或 WebSocket；未開始 P2-D～P2-F，未修改 Card／Deck／models.py／migration。未 commit。
+
+### 採用的決策
+
+1. 動作 payload：`GameAction` 不變，Protocol 以泛型 `PayloadT` 接收各引擎自訂 payload，不接受任意 dict。
+2. 牌組來源：`create_game` 接收 `Deck`，以 `require_production_deck` 拒絕非精確 Deck、test-only、非完整未發牌牌組（不是防竄改機制）。
+3. 錯誤：預期內拒絕回傳 `GameError`；程式錯誤才拋例外（test-only 牌組為 `TestOnlyDeckError`）。
+4. 新型別放在新模組 `engine_types.py`，`models.py` 未改。
+5. 事件分 PUBLIC／PRIVATE：PUBLIC 不可有 recipient，PRIVATE 必須有且須屬於該局玩家。
+6. `GameResult` 只含各玩家 `points_delta` 與 `rank`，積分變化總和必為 0。
+
+### 契約與欄位矩陣
+
+| 方法 | 輸入 | 輸出 |
+| --- | --- | --- |
+| create_game | GameConfig、session_id、players tuple、Deck | GameState｜GameError |
+| validate_action | GameState、GameAction、PayloadT | ActionValidation（不改狀態） |
+| apply_action | GameState、GameAction、PayloadT | ApplyResult｜GameError（version＋1，事件連續） |
+| get_player_view | GameState、viewer_id | PlayerView｜GameError（只含 viewer 私有資料） |
+| is_game_over | GameState | bool |
+| calculate_result | GameState | GameResult｜GameError（未結束回錯誤） |
+
+新型別欄位：GameConfig（str、str）、GameEvent（int≥0、str、EventVisibility、UUID｜None）、
+ActionValidation（GameError｜None）、ApplyResult（GameState、精確 tuple[GameEvent]，seq 連續）、
+PlayerResult（UUID、有號 int、int≥1）、GameResult（精確 tuple[PlayerResult]，id 不重複、總和 0）。
+全部沿用 P2-B 的 `type(x) is X` 精確型別驗證，子類別一律拒絕。
+
+### 修改檔案
+
+- 新增：`backend/app/games/core/engine.py`、`engine_types.py`、`backend/tests/games/test_engine_contract.py`、`docs/reports/P2_C_TEST_EVIDENCE.json`。
+- 修改：`backend/app/games/core/__init__.py`（匯出）、`TASKS.md`、本檔。
+
+### 新增測試（28 項）與不適用項目
+
+涵蓋型別矩陣（16 個非法值案例）、PlayerResult／GameResult 的容器子類別、巢狀非法值、重複與守恆、
+ApplyResult 事件連續與 recipient、帶 `hand` 的 GameEvent 子類別、牌組來源規則（含說謊的 Deck 子類別）、
+以測試專用 stub 引擎驗證六方法（拒絕為資料、validate／view 不改狀態、version 與事件遞增、積分守恆、
+視圖不含他人手牌與剩餘牌），以及兩個新模組不匯入 fastapi／sqlalchemy 等框架。
+不適用：真實牌型、下注、認證、傳輸（後續階段）。stub 引擎只存在於測試，不進 Registry。
+
+### 實際結果
+
+環境：3.12.10，Windows-11-10.0.26300-SP0，PYTHONDONTWRITEBYTECODE=1、PYTEST_DISABLE_PLUGIN_AUTOLOAD=1。
+- P2-C engine contract：exit 0；28 passed in 0.14s
+- R2 public field matrix：exit 0；25 passed in 0.09s
+- R1 public isolation：exit 0；19 passed in 0.10s
+- Original P2-B regression：exit 0；124 passed in 2.04s
+- P2-A regression：exit 0；127 passed in 0.18s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.86s
+- Mypy：exit 0；Success: no issues found in 22 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；29 files already formatted
+- Full backend suite：exit 0；327 passed, 5 skipped, 1 warning in 3.56s
+- pip check：exit 0；No broken requirements found.
+
+P2-C 28＋R2 25＋R1 19＋原 P2-B 124＋P2-A 127＋健康檢查 3＝326；完整 backend 為 327 passed、5 skipped
+（5 項 PostgreSQL 測試仍未驗證通過；差額 1 項為健康檢查以外的既有測試）。
+證據檔 `P2_C_TEST_EVIDENCE.json` 的 `started_at` 已在檢查前取得（修正 R2 的順序問題）；
+`engine.py` SHA-256 `929f66a982864f650b2fbecab677b1693099f18c84617f1a4886877ebb0f5c05`；`engine_types.py` `381d50765f472f741c8099140bbd69a6b76a331544f4dced23dc37de7ecb712c`；
+`test_engine_contract.py` `e504f0907c34a22c72f4e343c36b4157acb37a12651978a4fcc233eb4d14d9d0`。R1／R2／原始證據未覆寫。
+
+### 尚未解決的限制
+
+- 型別與 Protocol 只描述契約；沒有真實引擎，契約的語意（例如「version＋1」「view 不含他人牌」）僅由 stub 測試示範，
+  真實引擎須各自通過同樣測試。
+- `require_production_deck` 只防誤用，不證明牌組已安全洗牌，也不防同程序竄改；P2-A 四項風險仍開放。
+- 事件目前只有中繼資料，沒有 payload；payload 與其可見性隔離留待引擎／P2-F。
+- 沿用 P2-B 信任限制：僅建構時驗證，copy／pickle／反射不重驗。
+- 正式認證、玩家資料投影、遊戲引擎與正式發牌仍未驗收；P2-C 是否結案須人工獨立驗收。
+
+---
+
 ## P2-B 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P2-B = **CONDITIONAL PASS**，核准**純型別階段**結案。
