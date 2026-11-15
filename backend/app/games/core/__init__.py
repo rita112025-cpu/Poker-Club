@@ -29,8 +29,20 @@ from app.games.core.models import (
     PublicGameData,
     Turn,
 )
+from app.games.core.registry import (
+    DUPLICATE_GAME,
+    ENGINE_METHODS,
+    UNKNOWN_GAME,
+    EngineRegistration,
+    EngineRegistry,
+)
 
 __all__ = [
+    "DUPLICATE_GAME",
+    "ENGINE_METHODS",
+    "UNKNOWN_GAME",
+    "EngineRegistration",
+    "EngineRegistry",
     "ActionValidation",
     "ApplyResult",
     "EventVisibility",

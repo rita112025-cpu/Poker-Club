@@ -1,5 +1,114 @@
 # Phase 2 進度報告
 
+## P2-D 正式結案決議 — CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P2-D = **CONDITIONAL PASS**，核准 **Registry 機制階段**結案。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 P2-E～P2-F，未做任何 Git 寫入。
+
+### 驗收範圍與獨立複驗結果
+
+- 範圍：`registry.py`（`EngineRegistration`、`EngineRegistry`）及其測試。
+- 獨立複驗：`models.py`、`engine.py`、`engine_types.py`、Card、Deck、migration、舊測試與 B／R1／R2／C 證據相對 HEAD 無差異；
+  P2-D 證據 17 個來源雜湊、R1／R2／P2-C 證據雜湊與 12 項檢查退出碼皆吻合。
+- Backend：**361 passed、5 skipped**（327＋34）；5 項 PostgreSQL 測試**尚未驗證通過**。Mypy、Ruff、格式檢查通過。
+- 對抗驗證：全形字元、阿拉伯數字、尾端換行 code 被拒；重複不覆蓋；錯誤訊息不回顯輸入；副本上 10 種變異全被抓到。
+- 歷史紀錄與各階段證據皆保留，未覆寫。
+
+### 保留條件
+
+1. **`register()` 的失敗結果可被忽略**：成功回傳 `None`、重複回傳 `GameError`；呼叫端（組裝層）**必須檢查回傳值**，否則重複登記會被默默吞掉，Python 與 mypy 都不會警告。
+2. **空 Registry 在布林判斷為 False**（定義了 `__len__`）：不得用 `registry or EngineRegistry()` 這類寫法；應以 `is None` 判斷。
+3. **執行期方法檢查可被繞過**：只定義 `__getattr__` 回傳可呼叫物件的引擎可通過；登記後改寫引擎方法不會重新檢查。檢查只確認存在且可呼叫，不驗證簽章或語意。
+4. **內部狀態未封閉**：直接寫入 `registry._entries` 可繞過驗證（屬 P2-B 已記載的同程序任意程式碼信任限制）。
+5. 登記不是執行緒安全，僅限啟動階段登記、之後視為唯讀。
+6. 沿用 P2-B／P2-C 保留條件：僅建構時驗證；真實引擎前須先建立共用契約測試套件。
+
+### P2-A 持續開放事項（仍未完成）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險。
+- [ ] test-only Deck 與正式引擎的隔離。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口。
+
+### 尚未驗收（P2-D 通過不代表已完成）
+
+- 真實遊戲引擎與正式發牌；Registry 目前實際為空。
+- 共用契約測試套件。
+- 「資料庫 enabled 且已登記才可玩」的交集（組裝層）。
+- 正式認證與授權、玩家資料投影。
+- 牌型辨識（P2-E）、Phase 2 整體驗收（P2-F）。
+- PostgreSQL 測試（5 項 skipped）。
+
+---
+
+## P2-D Engine Registry — 已人工驗收（見上方結案決議）
+
+日期：2026-11-15（Asia/Taipei）。依 5 項規劃決策（照建議）實作純記憶體 Registry。
+未實作任何真實遊戲、未建立假引擎進正式模組、未連資料庫、未改 migration；未開始 P2-E／P2-F；未 commit。
+
+### 採用的決策
+
+1. `EngineRegistry` 為一般實例，無模組層全域單例；由未來組裝層於啟動時建立並登記。
+2. 預期內拒絕（重複／未知 code）回傳 `GameError`（`duplicate_game`、`unknown_game`）；不合規的登記（錯誤 code、人數、非引擎物件）拋例外。未知 code 不會被寫進錯誤訊息。
+3. Registry 不讀資料庫，只提供 `is_registered`；可玩 = 資料庫 `enabled` 且 Registry 已登記，由組裝層取交集。
+4. Registry 不保存 `enabled` 旗標；「未實作遊戲不可啟用」以「未登記即查不到」表達。
+5. 登記記錄帶 `min_players`／`max_players`（2 ≤ min ≤ max，與資料庫 CHECK 一致），但不與資料庫比對。
+
+### 契約與欄位矩陣
+
+| 項目 | 精確型別／規則 | 驗證入口 |
+| --- | --- | --- |
+| EngineRegistration.code | `str`，`[a-z][a-z0-9_]{1,31}`（fullmatch，對應 game_types.code 32 字） | `__post_init__` |
+| rules_version | `str` 非空白 | 同上 |
+| min_players／max_players | `int`（非 bool），min ≥ 2，max ≥ min | 同上 |
+| engine | 必須是實例（非 class），六個方法皆存在且可呼叫 | 同上（執行期檢查，補 Protocol 靜態限制） |
+| register(registration) | 精確 `EngineRegistration`；重複回傳 GameError，不覆蓋 | `register` |
+| get／is_registered(code) | 精確 `str`（非 str 拋 TypeError）；未知回傳 GameError | 各方法 |
+| codes()／registrations() | 排序的不可變 tuple 快照 | — |
+
+### 修改檔案
+
+- 新增：`backend/app/games/core/registry.py`、`backend/tests/games/test_registry.py`、`docs/reports/P2_D_TEST_EVIDENCE.json`。
+- 修改：`backend/app/games/core/__init__.py`（匯出）、`TASKS.md`、本檔。`models.py`、`engine.py`、`engine_types.py`、Card、Deck、migration 未改。
+
+### 新增測試（34 項）與不適用項目
+
+空 Registry 與四個資料庫目錄 code 皆未登記、登記與查詢往返、重複不覆蓋、未知不回顯輸入、
+非 exact str 的查詢、10 種格式錯誤 code 與長度邊界、10 種非法中繼資料（子類別、bool、float、範圍）、
+六個方法逐一缺失／不可呼叫、class 與 None 當引擎、登記物件子類別、快照不外洩內部狀態與 `__slots__`、
+實例互相獨立、模組不匯入框架或 `app.db`。不適用：資料庫 enabled 旗標（刻意不存在）、執行緒安全（僅啟動期登記）。
+另在副本上做 10 種變異驗證（覆蓋重複、回顯 code、match 取代 fullmatch、移除方法檢查、允許 class、移除人數檢查、
+放寬型別、未排序等），全部被測試抓到。
+
+### 實際結果
+
+環境：3.12.10，Windows-11-10.0.26300-SP0，PYTHONDONTWRITEBYTECODE=1、PYTEST_DISABLE_PLUGIN_AUTOLOAD=1。
+- P2-D registry：exit 0；34 passed in 0.13s
+- P2-C engine contract：exit 0；28 passed in 0.15s
+- R2 public field matrix：exit 0；25 passed in 0.09s
+- R1 public isolation：exit 0；19 passed in 0.11s
+- Original P2-B regression：exit 0；124 passed in 2.02s
+- P2-A regression：exit 0；127 passed in 0.19s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.87s
+- Mypy：exit 0；Success: no issues found in 24 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；31 files already formatted
+- Full backend suite：exit 0；361 passed, 5 skipped, 1 warning in 3.64s
+- pip check：exit 0；No broken requirements found.
+
+證據檔 `P2_D_TEST_EVIDENCE.json`；`registry.py` SHA-256 `0ec96c474810f5a3f73cc22ef0c97fb6e0d94218ce6cf85778988fb56a539d6d`；`test_registry.py` `0ed88d81e9567f55a994f5de139e1d69bf2cc607fba1b5665ecdfd037eb331cb`。
+R1／R2／P2-C／原始證據未覆寫。
+
+### 尚未解決的限制
+
+- 目前沒有真實引擎，Registry 在實際應用中為空；本輪只驗證機制。
+- 執行期檢查只確認方法存在且可呼叫，不驗證簽章或語意；仍需 P2-C 保留條件 1 的共用契約測試套件（建議在第一個真實引擎前完成）。
+- 登記不是執行緒安全；僅限啟動階段登記，之後視為唯讀。
+- 與資料庫目錄的交集（可玩 = enabled ∧ 已登記）尚未實作，屬組裝層。
+- P2-A 四項風險仍開放；認證、玩家投影、真實引擎與正式發牌仍未驗收。P2-D 是否結案須人工獨立驗收。
+
+---
+
 ## P2-C 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P2-C = **CONDITIONAL PASS**，核准**契約階段**結案。
