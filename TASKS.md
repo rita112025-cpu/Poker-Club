@@ -23,16 +23,16 @@
 持續限制：不安裝 Docker Desktop、不啟用 WSL、不改 Windows 設定；
 不 commit/push/merge/rebase、不建立 PR、不改 Git 身分。
 P2-A 驗收為 CONDITIONAL PASS；P2-B 經 R2 修補與人工驗收為 CONDITIONAL PASS，核准純型別階段結案
-（保留條件見 `docs/reports/PHASE_2.md`）。P2-C 契約階段已結案；P2-D 機制階段已結案；P2-E 五張牌型階段已結案；P2-F 尚未開始，須使用者另行授權。
+（保留條件見 `docs/reports/PHASE_2.md`）。P2-C 契約階段已結案；P2-D 機制階段已結案；P2-E 五張牌型階段已結案；P2-F 階段已結案；Phase 2 整體與 P2-07 待人工決定。
 
-## Phase 2 — 共用核心（P2-B～P2-E 已結案；P2-F 待授權）
+## Phase 2 — 共用核心（P2-B～P2-F 各階段已結案；Phase 2 整體與 P2-07 待人工決定）
 
 - [x] P2-01（P2-A）Card／Rank／Suit 值型別；驗收 52 張唯一牌、序列化往返、拒絕非法牌。
 - [x] P2-02（P2-A）Deck／安全 Shuffle／發牌／剩餘數／重置；固定牌序注入有 test-only 標記。
-- [ ] P2-03 Player／Room／Session／Event／Result 型別與不可變動作；驗收狀態及事件版本。
-- [ ] P2-04 GameEngine Protocol 六個方法與 registry；驗收重複及未知引擎錯誤。
-- [ ] P2-05 五張德州牌型純函式／比較測試；驗收所有牌型、wheel、踢腳、平手及不依賴花色。
-- [ ] P2-06 隱藏資料投影契約及十三支介面擴充測試；不可啟用未實作遊戲。
+- [ ] P2-03 Player／Room／Session／Event／Result 型別與不可變動作；驗收狀態及事件版本。（部分完成：Room、GameSession 延後，規格未定義欄位契約）
+- [x] P2-04 GameEngine Protocol 六個方法與 registry；驗收重複及未知引擎錯誤。（P2-C、P2-D 已結案）
+- [x] P2-05 五張德州牌型純函式／比較測試；驗收所有牌型、wheel、踢腳、平手及不依賴花色。（P2-E 已結案）
+- [x] P2-06 隱藏資料投影契約及十三支介面擴充測試；不可啟用未實作遊戲。（P2-F 已結案，CONDITIONAL PASS）
 - [ ] P2-07 核心測試／型別／品質檢查、報告、更新任務及建議 commit。
 
 ### 分批驗收對照
@@ -45,11 +45,11 @@ P2-A 驗收為 CONDITIONAL PASS；P2-B 經 R2 修補與人工驗收為 CONDITION
 - [x] P2-C：六方法引擎 Protocol、結果型別、牌組來源規則與契約測試；人工驗收 CONDITIONAL PASS，契約階段結案（保留條件見 PHASE_2.md）。不含真實引擎、玩家投影、認證或正式發牌。
 - [x] P2-D：EngineRegistry（重複／未知 code 錯誤、未登記即不可用、無 enabled 旗標）；人工驗收 CONDITIONAL PASS，Registry 機制階段結案（保留條件見 PHASE_2.md）。目前無真實引擎，Registry 實際為空。
 - [x] P2-E：德州五張牌型純函式與比較（wheel、踢腳、平手、不依賴花色）；人工驗收 CONDITIONAL PASS，五張牌型階段結案（保留條件見 PHASE_2.md）。不含七選五、結算、真實引擎、玩家投影或正式發牌。
-- [ ] P2-F（僅規劃；P2-06／07）：私有資訊投影、十三支擴充契約及 Phase 2 整體驗收。
+- [x] P2-F：投影工具、共用引擎契約測試套件、十三支擴充性驗證與 Phase 2 對帳／風險總表；人工驗收 CONDITIONAL PASS，P2-F 階段結案（保留條件見 PHASE_2.md）。P2-07 不勾選，Phase 2 整體狀態另待人工決定。
 
 P2-A 不代表整個 Phase 2 完成；P2-07 仍需全階段功能到齊後才可勾選。
-P2-03 整體尚未完成：本輪沒有獨立 Room／GameSession／GameEvent／GameResult 型別。
-本輪不實作 P2-C～P2-F，不接入正式發牌，不變更 Phase 1 migration 或 card.py／deck.py。
+P2-03 整體尚未完成：GameEvent／GameResult 已於 P2-C 實作，Room／GameSession 型別仍未實作（延後）。
+（P2-A 當時的限制，已由後續階段更新）本輪不實作 P2-C～P2-F，不接入正式發牌，不變更 Phase 1 migration 或 card.py／deck.py。
 
 ### P2-A 持續開放事項（不得視為 P2-B 已解決）
 
@@ -105,6 +105,15 @@ P2-03 整體尚未完成：本輪沒有獨立 Room／GameSession／GameEvent／G
 - [x] P2-E-03 52 項測試與組合數 oracle；完整 backend 413 passed、5 skipped；一次性窮舉 2,598,960 手與公認數字相符。
 - [x] P2-E-04 `P2_E_TEST_EVIDENCE.json` 與 PHASE_2 報告完成；停止等待人工驗收。
 - [x] P2-E-05 人工獨立複驗完成；決議 CONDITIONAL PASS，核准 P2-E 五張牌型階段結案（保留條件見 PHASE_2.md）。
+
+### P2-F 投影、契約套件與整體對帳
+
+- [x] P2-F-01 規劃與 5 項決策確認（照建議）。
+- [x] P2-F-02 `projection.py`：project_player_view／events_for_viewer，15 項測試、10 種變異全被抓到。
+- [x] P2-F-03 `engine_contract_suite.py`：可重用契約套件；13 種故意寫壞的引擎全被抓到。
+- [x] P2-F-04 十三支擴充性（不同 payload 型別）與未登記不可啟用測試；無十三支規則。
+- [x] P2-F-05 完整 backend 445 passed、5 skipped；`P2_F_TEST_EVIDENCE.json`、Phase 2 對帳與風險總表完成；停止等待人工驗收。
+- [x] P2-F-06 人工獨立複驗完成；決議 CONDITIONAL PASS，核准 P2-F 階段結案（保留條件見 PHASE_2.md）。Phase 2 整體是否收尾與 P2-07 勾選仍待人工決定。
 
 ## Phase 3 — 德州撲克
 

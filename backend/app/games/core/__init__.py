@@ -29,6 +29,7 @@ from app.games.core.models import (
     PublicGameData,
     Turn,
 )
+from app.games.core.projection import NOT_IN_GAME, events_for_viewer, project_player_view
 from app.games.core.registry import (
     DUPLICATE_GAME,
     ENGINE_METHODS,
@@ -38,6 +39,9 @@ from app.games.core.registry import (
 )
 
 __all__ = [
+    "NOT_IN_GAME",
+    "events_for_viewer",
+    "project_player_view",
     "DUPLICATE_GAME",
     "ENGINE_METHODS",
     "UNKNOWN_GAME",
