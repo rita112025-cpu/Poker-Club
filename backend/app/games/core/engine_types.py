@@ -17,6 +17,8 @@ and a PRIVATE event must never be broadcast to anyone but its recipient.
 from dataclasses import dataclass
 from enum import Enum
 
+from app.games.core.extensions import EventPayload, check_event_payload
+
 # Reuse the P2-B exact-type validators so both modules share one rule set.
 from app.games.core.models import (
     GameError,
@@ -60,8 +62,10 @@ class GameEvent:
     event_type: str
     visibility: EventVisibility
     recipient_id: PlayerId | None = None
+    payload: EventPayload | None = None
 
     def __post_init__(self) -> None:
+        check_event_payload(self.payload, "event payload")
         _nonnegative_int(self.seq, "event seq")
         _text(self.event_type, "event_type")
         if type(self.visibility) is not EventVisibility:

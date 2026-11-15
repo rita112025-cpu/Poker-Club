@@ -1,19 +1,22 @@
-"""Reusable GameEngine contract checks (P2-F). Every real engine must pass these.
+"""Reusable GameEngine contract checks (P2-F, extended in P3-00). Every real engine must pass.
 
 check_engine_contract raises AssertionError on the first violation. It checks
-contract semantics only (versions, events, view isolation, card conservation,
-result conservation, test-only deck rejection); game rules stay in each engine's own tests.
-The scenario supplies a legal script and one illegal action, since only the engine
-knows its own legal moves.
+contract semantics only: test-only deck rejection, version and event ordering,
+card conservation, view isolation, result conservation, determinism, safe error
+messages and rejection of actions after the game is over. Game rules stay in each
+engine's own tests. The scenario supplies a legal script plus an illegal, a stale and
+an after-game-over action, since only the engine knows its own legal moves.
 """
 
 import copy
+import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from uuid import UUID
 
 from app.games.core import (
     ApplyResult,
+    Card,
     Deck,
     GameAction,
     GameConfig,
@@ -37,6 +40,8 @@ class ContractScenario[PayloadT]:
     # One action that is illegal in the given (non-final) state, e.g. wrong turn.
     illegal: Callable[[GameState], tuple[GameAction, PayloadT]]
     stale: Callable[[GameState], tuple[GameAction, PayloadT]]
+    # A well-formed action for the finished game (current version, plausible actor).
+    after_over: Callable[[GameState], tuple[GameAction, PayloadT]]
     max_steps: int = 200
 
 
@@ -44,15 +49,29 @@ def _snapshot(state: GameState) -> GameState:
     return copy.deepcopy(state)
 
 
-def _hands(state: GameState) -> dict[UUID, tuple[object, ...]]:
+def _hands(state: GameState) -> dict[UUID, tuple[Card, ...]]:
     return {item.player_id: item.hand for item in state.private.players}
 
 
-def _check_cards(state: GameState) -> None:
+def _secret_cards(state: GameState) -> list[Card]:
     cards = [card for item in state.private.players for card in item.hand]
-    cards += list(state.private.remaining_cards)
+    return cards + list(state.private.remaining_cards)
+
+
+def _check_cards(state: GameState) -> None:
+    cards = _secret_cards(state)
     assert len(cards) == len(set(cards)), "a card appears more than once"
     assert len(cards) <= 52, "more than 52 cards in play"
+
+
+def _assert_safe(error: object, state: GameState, what: str) -> None:
+    """GameError text must never reveal a hidden card (hands or the undealt deck)."""
+    assert isinstance(error, GameError), f"{what} must be a GameError"
+    text = f"{error.code} {error.message}"
+    for card in _secret_cards(state):
+        assert repr(card) not in text, f"{what} reveals a hidden card"
+        pattern = rf"(?<![A-Za-z0-9]){re.escape(card.code)}(?![A-Za-z0-9])"
+        assert re.search(pattern, text) is None, f"{what} reveals a hidden card code"
 
 
 def _check_views[PayloadT](engine: GameEngine[PayloadT], state: GameState) -> None:
@@ -63,6 +82,8 @@ def _check_views[PayloadT](engine: GameEngine[PayloadT], state: GameState) -> No
         assert view.viewer_id == player.id and view.private.player_id == player.id
         assert view.private.hand == hands.get(player.id, ()), "view has the wrong hand"
         assert view.public == state.public, "view public data differs from state"
+        assert view.extension == state.extension, "view extension differs from state"
+        assert engine.get_player_view(state, player.id) == view, "get_player_view is not repeatable"
         text = repr(asdict(view.public)) + repr(view)
         others = [card for pid, hand in hands.items() if pid != player.id for card in hand] + list(
             state.private.remaining_cards
@@ -71,6 +92,30 @@ def _check_views[PayloadT](engine: GameEngine[PayloadT], state: GameState) -> No
             assert repr(card) not in text, "another hand or the remaining deck leaked"
     outsider = engine.get_player_view(state, UUID(int=2**100))
     assert isinstance(outsider, GameError), "a non-member must not receive a view"
+    _assert_safe(outsider, state, "non-member view error")
+
+
+def _check_rejection[PayloadT](
+    engine: GameEngine[PayloadT],
+    state: GameState,
+    action: GameAction,
+    payload: PayloadT,
+    what: str,
+) -> None:
+    before = _snapshot(state)
+    validation = engine.validate_action(state, action, payload)
+    assert validation.error is not None, f"{what} accepted by validate_action"
+    _assert_safe(validation.error, state, f"{what} validation error")
+    applied = engine.apply_action(state, action, payload)
+    assert isinstance(applied, GameError), f"{what} applied by apply_action"
+    _assert_safe(applied, state, f"{what} apply error")
+    assert engine.validate_action(state, action, payload) == validation, (
+        f"{what} validation is not repeatable"
+    )
+    assert engine.apply_action(state, action, payload) == applied, (
+        f"{what} rejection is not repeatable"
+    )
+    assert state == before, f"{what} changed the state"
 
 
 def check_engine_contract[PayloadT](
@@ -98,27 +143,17 @@ def check_engine_contract[PayloadT](
     _check_cards(state)
     _check_views(engine, state)
 
-    # Rejections are data, never change the state, and not over yet.
+    # Rejections are repeatable data, reveal nothing, never change the state.
     assert not engine.is_game_over(state), "a new game cannot already be over"
-    assert isinstance(engine.calculate_result(state), GameError), "result before game over"
-    before = _snapshot(state)
+    early = engine.calculate_result(state)
+    assert isinstance(early, GameError), "result before game over"
+    _assert_safe(early, state, "early result error")
     action, payload = scenario.illegal(state)
-    assert engine.validate_action(state, action, payload).error is not None, (
-        "illegal action accepted"
-    )
-    assert isinstance(engine.apply_action(state, action, payload), GameError), (
-        "illegal action applied"
-    )
+    _check_rejection(engine, state, action, payload, "illegal action")
     action, payload = scenario.stale(state)
-    assert engine.validate_action(state, action, payload).error is not None, (
-        "stale version accepted"
-    )
-    assert isinstance(engine.apply_action(state, action, payload), GameError), (
-        "stale version applied"
-    )
-    assert state == before, "a rejected action changed the state"
+    _check_rejection(engine, state, action, payload, "stale version")
 
-    # Legal script: version + 1, consecutive events, identity preserved.
+    # Legal script: version + 1, increasing events, identity preserved, deterministic.
     last_seq = -1
     for _ in range(scenario.max_steps):
         step = scenario.next_legal(state)
@@ -131,6 +166,9 @@ def check_engine_contract[PayloadT](
         outcome = engine.apply_action(state, action, payload)
         assert isinstance(outcome, ApplyResult), "a legal action was rejected"
         assert state == before, "apply_action mutated its input"
+        assert engine.apply_action(state, action, payload) == outcome, (
+            "apply_action is not deterministic"
+        )
         new = outcome.state
         assert new.public.state_version == state.public.state_version + 1, (
             "version must increase by exactly 1"
@@ -150,15 +188,15 @@ def check_engine_contract[PayloadT](
     else:
         raise AssertionError("script did not finish within max_steps")
 
-    # Game over: result covers exactly the players and conserves points.
+    # Game over: result covers exactly the players, conserves points, is repeatable.
     assert engine.is_game_over(state), "script finished but the game is not over"
     result = engine.calculate_result(state)
     assert isinstance(result, GameResult), "no result after game over"
+    assert engine.calculate_result(state) == result, "calculate_result is not repeatable"
     assert {p.player_id for p in result.players} == {p.id for p in state.public.players}, (
         "result must cover exactly the players"
     )
     assert sum(p.points_delta for p in result.players) == 0
-    # No further actions once over.
-    if scenario.players:
-        late_action, late_payload = scenario.illegal(state)
-        assert engine.validate_action(state, late_action, late_payload).error is not None
+    # A well-formed action after the game is over must be rejected.
+    late_action, late_payload = scenario.after_over(state)
+    _check_rejection(engine, state, late_action, late_payload, "action after game over")

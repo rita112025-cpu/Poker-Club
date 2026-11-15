@@ -333,3 +333,65 @@ def test_module_depends_statically_only_on_card() -> None:
     assert internal == {"app.games.core.card"}
     forbidden = {"fastapi", "starlette", "sqlalchemy", "pydantic", "alembic", "random", "secrets"}
     assert not {name.split(".")[0] for name in modules} & forbidden
+
+
+# ---- P3-00: HandRank semantic validation ----------------------------------------
+
+
+def test_hand_rank_accepts_exactly_the_reachable_tiebreaks_of_every_category() -> None:
+    from app.games.texas_holdem.hands import _TIEBREAK_LENGTH, _is_possible
+
+    accepted = {
+        category: sum(
+            1
+            for tiebreak in itertools.product(range(2, 15), repeat=length)
+            if _is_possible(category, tiebreak)
+        )
+        for category, length in _TIEBREAK_LENGTH.items()
+    }
+    # Distinct strengths per category (10/156/156/1277/10/858/858/2860/1277 = 7462).
+    assert accepted == {
+        C.STRAIGHT_FLUSH: 10,
+        C.FOUR_OF_A_KIND: 156,
+        C.FULL_HOUSE: 156,
+        C.FLUSH: 1277,
+        C.STRAIGHT: 10,
+        C.THREE_OF_A_KIND: 858,
+        C.TWO_PAIR: 858,
+        C.ONE_PAIR: 2860,
+        C.HIGH_CARD: 1277,
+    }
+    assert sum(accepted.values()) == 7462
+
+
+def test_constructor_agrees_with_the_semantic_predicate_on_random_tuples() -> None:
+    from app.games.texas_holdem.hands import _TIEBREAK_LENGTH, _is_possible
+
+    generator = random.Random(20261116)
+    for _ in range(6000):
+        category = generator.choice(list(HandCategory))
+        tiebreak = tuple(generator.randint(2, 14) for _ in range(_TIEBREAK_LENGTH[category]))
+        if _is_possible(category, tiebreak):
+            assert HandRank(category, tiebreak).tiebreak == tiebreak
+        else:
+            with pytest.raises(ValueError, match="impossible"):
+                HandRank(category, tiebreak)
+
+
+def test_impossible_tiebreaks_found_by_the_reviewer_are_rejected() -> None:
+    impossible = [
+        (C.STRAIGHT, (2,)),
+        (C.FULL_HOUSE, (5, 5)),
+        (C.FLUSH, (2, 3, 4, 5, 6)),
+        (C.STRAIGHT_FLUSH, (3,)),
+        (C.FLUSH, (9, 9, 9, 9, 9)),
+        (C.FLUSH, (14, 5, 4, 3, 2)),  # that hand is a steel wheel, not a flush
+        (C.FOUR_OF_A_KIND, (7, 7)),
+        (C.TWO_PAIR, (4, 9, 2)),
+        (C.TWO_PAIR, (9, 4, 9)),
+        (C.ONE_PAIR, (5, 5, 4, 3)),
+        (C.THREE_OF_A_KIND, (7, 3, 9)),
+    ]
+    for category, tiebreak in impossible:
+        with pytest.raises(ValueError, match="impossible"):
+            HandRank(category, tiebreak)

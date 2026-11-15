@@ -16,6 +16,12 @@ from app.games.core.engine_types import (
     GameResult,
     PlayerResult,
 )
+from app.games.core.extensions import (
+    EventPayload,
+    PublicExtension,
+    register_event_payload,
+    register_public_extension,
+)
 from app.games.core.models import (
     GameAction,
     GameError,
@@ -39,6 +45,10 @@ from app.games.core.registry import (
 )
 
 __all__ = [
+    "EventPayload",
+    "PublicExtension",
+    "register_event_payload",
+    "register_public_extension",
     "NOT_IN_GAME",
     "events_for_viewer",
     "project_player_view",

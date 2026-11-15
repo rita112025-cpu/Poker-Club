@@ -236,7 +236,7 @@ def test_event_subclass_carrying_hand_cannot_enter_apply_result() -> None:
         hand: tuple[Card, ...] = ()
 
     _, state = new_game()
-    leaked = EventWithHand(1, "a", EventVisibility.PUBLIC, None, (Card.from_code("AS"),))
+    leaked = EventWithHand(1, "a", EventVisibility.PUBLIC, hand=(Card.from_code("AS"),))
     assert "hand" in asdict(leaked)
     with pytest.raises(TypeError, match="exact GameEvent"):
         ApplyResult(state, (leaked,))

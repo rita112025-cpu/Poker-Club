@@ -17,7 +17,7 @@ Rules for every engine:
 from typing import Protocol
 from uuid import UUID
 
-from app.games.core.deck import Deck
+from app.games.core.deck import Deck, DeckUnavailableError
 from app.games.core.engine_types import (
     ActionValidation,
     ApplyResult,
@@ -45,13 +45,15 @@ class TestOnlyDeckError(ValueError):
 def require_production_deck(deck: object) -> Deck:
     """Gate for create_game implementations; guards against misuse, not tampering.
 
-    Accepts only an exact, unused, securely shuffled Deck. Client-provided card
+    Accepts only an exact, available, unused, securely shuffled Deck. Client-provided card
     orders never reach this point because engines never accept them.
     """
     if type(deck) is not Deck:
         raise TypeError("deck must be an exact Deck instance")
     if deck.is_test_only:
         raise TestOnlyDeckError("test-only decks are not accepted by engines")
+    if not deck.is_available:
+        raise DeckUnavailableError("deck is unavailable after a failed secure shuffle")
     if deck.remaining_count != FULL_DECK_SIZE:
         raise ValueError("engines require a complete, undealt deck")
     return deck

@@ -11,6 +11,9 @@ public data was altered after construction). Nothing from the input is reused as
 view, and other players' hands and the remaining cards are never read into the result.
 """
 
+from dataclasses import replace
+from typing import Any, cast
+
 from app.games.core.card import Card
 from app.games.core.engine_types import EventVisibility, GameEvent
 from app.games.core.models import (
@@ -41,7 +44,9 @@ def project_player_view(state: GameState, viewer_id: PlayerId) -> PlayerView | G
         if item.player_id == viewer_id:
             hand = item.hand
             break
-    return PlayerView(viewer_id, rebuilt, PrivatePlayerData(viewer_id, hand))
+    # replace() re-runs the extension's own validation, like the public rebuild above.
+    extension = None if state.extension is None else replace(cast(Any, state.extension))
+    return PlayerView(viewer_id, rebuilt, PrivatePlayerData(viewer_id, hand), extension)
 
 
 def events_for_viewer(events: tuple[GameEvent, ...], viewer_id: PlayerId) -> tuple[GameEvent, ...]:

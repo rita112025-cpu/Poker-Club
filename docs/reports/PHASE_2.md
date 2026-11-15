@@ -1,5 +1,143 @@
 # Phase 2 進度報告
 
+## P3-00 正式結案決議 — CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P3-00 = **CONDITIONAL PASS**，核准 **P3-00 前置加固階段**結案。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 P3-01，未做任何 Git 寫入。
+注意：工作區仍有尚未提交的 Phase 2 收尾文件與 P3-00 實作。
+
+### 驗收範圍與獨立複驗結果
+
+- 範圍：Deck 失敗關閉、test-only 靜態守衛、契約套件補缺口、`HandRank` 語意驗證、公開資料／事件 payload 擴充機制。
+- 獨立複驗：`card.py`、`registry.py`、migration、舊測試與七份舊證據無差異；P3-00 證據 27 個來源雜湊、六份舊證據雜湊與 17 項檢查退出碼皆吻合。
+- Backend：**480 passed、5 skipped**；5 項 PostgreSQL 測試**尚未驗證通過**。Mypy、Ruff、格式檢查通過。
+- 對抗驗證：失敗的 Deck 經 `copy`／`deepcopy`／pickle 重建後仍不可用；可達強度集合與 `HandRank` 接受集合完全相等（7462）；
+  建構後被換成未註冊類別的擴充資料在投影時被拒；靜態守衛能抓直接使用。
+- 歷史紀錄與各階段證據皆保留，未覆寫。
+
+### 保留條件（前三項須在 P3-01 實作德州擴充資料前處理）
+
+1. **契約套件抓不到經由擴充資料洩漏的隱藏牌**：視圖只檢查 `repr(card)`；把牌面碼放進公開擴充資料字串、
+   送到每個玩家視圖的引擎未被偵測。須對擴充資料與事件 payload 的文字做牌面碼比對。
+2. **錯誤訊息洩漏的格式變體抓不到**：小寫牌面碼（如 `2c`）、牌名（如 `Two of Clubs`）通過套件。
+3. **擴充機制不強制欄位驗證**：註冊只要求有 `__post_init__`，內容為 `pass` 也可通過；實測未驗證的註冊擴充可接受帶隱藏屬性的 `str` 子類別，
+   投影後仍保留。須為每個擴充類別要求欄位矩陣測試，並公開共用的精確型別驗證函式。
+4. **P2-A 風險 2 的靜態守衛可被繞過**（如 `getattr(Deck, "for_" + "testing")`）：僅防誤用，風險 2 仍開放。
+5. 失敗的 Deck 的 `repr` 仍顯示 `remaining_count=52`；擴充白名單為全域，測試中會累積註冊。
+6. 沿用前幾階段的信任限制；契約套件仍只在 stub 上驗證。
+7. 標準德州預設（短額 all-in 不重新開放加注、加注為「加到」）與單手牌範圍仍待人工確認；盲注金額、初始積分、是否燒牌**尚未提供**。
+
+### P2-A 持續開放事項（狀態更新）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險：P3-00 已實作失敗關閉並通過獨立複驗，**修補成立**；
+  仍保留未勾選，是否正式標記為已解決由人工決定。
+- [ ] test-only Deck 與正式引擎的隔離：僅緩解（見條件 4），仍開放。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制：仍開放。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口：仍開放。
+
+### 尚未驗收（P3-00 通過不代表已完成）
+
+- 德州專屬公開資料、事件 payload、盲注、按鈕、各街、下注、七選五、邊池、結算與引擎（P3-01～P3-05）。
+- Room、GameSession、認證與授權、傳輸層、資料庫整合；PostgreSQL 測試（5 項 skipped）。
+
+---
+
+## P3-00 Phase 3 前置加固 — 已人工驗收（見上方結案決議）
+
+日期：2026-11-15（Asia/Taipei）。依 Phase 3 規劃 5 項決策（照建議）實作。
+**未開始 P3-01**：沒有任何德州狀態、盲注、下注、邊池或引擎；未接 Registry；未 commit。
+本輪**有意修改**先前已結案的檔案（`deck.py`、`models.py`、`engine_types.py`、`engine.py`、`projection.py`、`hands.py`、契約套件與少量測試），
+範圍僅限下列 5 項；其餘已結案檔案與全部歷史證據未動。
+
+### 採用的決策
+
+1. 採用 P3-00，P2-A 風險 1、2 為必要前置。
+2. 公開資料與事件 payload 以**組合＋精確型別白名單**加入，不改 `PublicGameData` 的既有欄位。
+3. 固定牌序由測試專用受信任路徑注入；正式 `create_game` 仍拒絕 test-only；以靜態守衛防止應用程式碼誤用。
+4. 一局＝單手牌（先做單手）。
+5. 積分語意與盲注數值：採標準德州預設並標為**待人工確認**（短額 all-in 不重新開放加注、加注為「加到」；盲注金額、初始積分、燒牌尚未定，P3-01 前須提供）。
+
+### 工作項目與結果
+
+1. **P2-A 風險 1（修補，待驗收）**：`Deck.shuffle()`／`reset()` 改為在副本上洗牌、成功後才取代牌序；失敗（含 `BaseException`）時牌組進入不可用狀態，
+   `deal()` 拋出 `DeckUnavailableError`，直到下一次 `reset()`／`shuffle()` 成功；新增 `is_available`；`require_production_deck` 拒絕不可用牌組。7 項新測試含「半途失敗不外露順序」。
+2. **P2-A 風險 2（緩解，非根除）**：新增靜態守衛測試，掃描 `app/` 確認除 `deck.py` 定義處外沒有任何 `for_testing`／`*_for_testing` 使用；
+   test-only 旗標與同程序竄改的信任限制**仍開放**。
+3. **契約套件補三項缺口（並再擴充）**：錯誤訊息不得含隱藏牌（`repr` 與牌面碼，涵蓋驗證／套用／視圖／結果錯誤）、
+   `apply_action`／`validate_action`／`get_player_view`／`calculate_result` 可重複且決定性、結束後須拒絕形式合法的動作（新增 `after_over` 場景欄位）、視圖擴充資料與狀態一致。
+   故意寫壞的引擎由 13 種增至 **19 種**，全被抓到且各有對應失敗訊息。
+4. **`HandRank` 語意驗證**：建構時拒絕不可能的牌力（2 高順子、單一點數葫蘆、非遞減同花等）。
+   窮舉 oracle：各牌型被接受的 tiebreak 數量恰為 10／156／156／1277／10／858／858／2860／1277（合計 7462），與可達強度完全一致；另以隨機抽樣驗證建構子與判定一致。
+5. **擴充機制**：新增 `core/extensions.py`（`PublicExtension`、`EventPayload`、`register_public_extension`、`register_event_payload`）。
+   `GameState`／`PlayerView` 新增可選 `extension`，`GameEvent` 新增可選 `payload`（皆預設 `None`）；只接受已註冊、**精確型別**的 frozen＋slots dataclass，且須自行定義 `__post_init__`；
+   子類別、未註冊類別、dict 一律拒絕。`project_player_view` 以 `replace()` 重建並重新驗證擴充資料，建構後被改寫的擴充資料會在投影時被拒絕。19 項測試。
+
+### 與已結案契約的差異（須人工確認）
+
+- `GameState`、`PlayerView`、`GameEvent` 各新增一個預設 `None` 的欄位；既有欄位、位置參數順序與 `PublicGameData` 不變。
+- 兩個既有測試的呼叫點調整：`test_engine_contract.py`、`test_projection.py` 中的 `EventWithHand` 因新欄位 `payload` 位於額外欄位之前，原本第 5 個位置參數改為 `hand=` 關鍵字；測試意圖與斷言不變。
+- 公開輸出（`asdict`／`repr`）會多出 `extension`／`payload` 欄位（內容為已註冊的公開型別）。
+
+### 實際結果
+
+環境：3.12.10，Windows-11-10.0.26300-SP0，PYTHONDONTWRITEBYTECODE=1、PYTEST_DISABLE_PLUGIN_AUTOLOAD=1。
+- P3-00 extensions：exit 0；19 passed in 0.13s
+- P3-00 deck failure and isolation：exit 0；7 passed in 0.12s
+- P2-F projection：exit 0；15 passed in 0.13s
+- P2-F contract suite：exit 0；23 passed in 0.26s
+- P2-E texas hands：exit 0；55 passed in 3.20s
+- P2-D registry：exit 0；34 passed in 0.15s
+- P2-C engine contract：exit 0；28 passed in 0.16s
+- R2 public field matrix：exit 0；25 passed in 0.11s
+- R1 public isolation：exit 0；19 passed in 0.12s
+- Original P2-B regression：exit 0；124 passed in 2.17s
+- P2-A regression：exit 0；127 passed in 0.22s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.91s
+- Mypy：exit 0；Success: no issues found in 34 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；41 files already formatted
+- Full backend suite：exit 0；480 passed, 5 skipped, 1 warning in 7.43s
+- pip check：exit 0；No broken requirements found.
+
+新增測試：extensions 19、Deck 失敗與隔離 7、契約套件 +6（含 6 種新壞引擎）、`HandRank` +3，合計 +35；完整 backend **480 passed、5 skipped**（445＋35；5 項 PostgreSQL 測試仍未驗證通過）。
+副本上 21 種變異（白名單、精確型別、凍結／slots／驗證檢查、投影重建、Deck 失敗關閉各環節、閘門、`HandRank` 語意）全部被抓到。
+證據檔 `P3_00_TEST_EVIDENCE.json`；`deck.py` SHA-256 `06e62540a0eba17e4285a196497d831d5675913ffe3d57342e0c011f439fb40d`；`extensions.py` `f455f1a8c52e5cb1667801015a3c69f73530b0891daf864c053db41f5358cd71`；`hands.py` `d62ad4d0d81005ba1f6d5c202ca718a7011c35e4b8fab24fd971fcec6c18298e`；
+`engine_contract_suite.py` `2d7f8ae9475d04ea4b1196ece6f190a96d0bd7acfc0a1032cefbafeb45c9b5ff`。B／R1／R2／C／D／E／F 證據未覆寫。
+
+### 尚未解決的限制
+
+- P2-A 風險 2 僅緩解：`Deck.for_testing` 仍可被同程序受信任程式呼叫；風險 3（同程序信任限制）、風險 4（歷史追溯）、PostgreSQL 5 項測試仍開放。
+- 擴充註冊是受信任的啟動期程式碼，不防禦任意同程序程式；全域白名單在測試中會累積註冊。
+- 契約套件仍只在 stub 上驗證；不涵蓋遊戲規則。
+- 德州專屬公開資料、事件 payload、單手牌的完整狀態皆未定義（P3-01 起）；盲注金額、初始積分、燒牌待確認。
+- Room、GameSession、認證、傳輸與資料庫整合仍未實作。P3-00 是否結案須人工獨立驗收。
+
+---
+
+## Phase 2 收尾決議 — CONDITIONAL（僅文件更新）
+
+人工決議：Phase 2 以 **CONDITIONAL** 方式收尾，進入 Phase 3 規劃。P2-07 已勾選。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 Phase 3 實作，未做任何 Git 寫入。
+
+### 收尾範圍
+
+- 已結案階段：P2-A（CONDITIONAL PASS）、P2-B、P2-C、P2-D、P2-E、P2-F（皆 CONDITIONAL PASS，各自的保留條件見對應章節）。
+- 最終回歸：**445 passed、5 skipped**；5 項 PostgreSQL 測試**尚未驗證通過**。
+
+### 與 PRD 交付邊界的差異（須明確承接）
+
+- PRD 的 Phase 2 交付包含 Room、GameSession 型別；規格未定義其欄位契約，**延後**，P2-03 保持未勾選並註明「部分完成」。
+  須在 Phase 3 或 Phase 5 開始前決定歸屬。
+
+### 帶入 Phase 3 的未解決事項（Phase 2 的風險總表仍然有效）
+
+- P2-A 四項風險仍未完成；其中風險 1、2 為先前建議的 Phase 3 前置條件，是否採用由人工在 Phase 3 規劃中決定。
+- 契約套件三項缺口（錯誤訊息洩漏、決定性、結束後動作）須在第一個真實引擎前補上。
+- `HandRank` 語意驗證、`register()` 回傳值檢查、標準德州規則假設待確認。
+- 正式認證、傳輸層、資料庫整合、真實引擎與正式發牌均未驗收。
+
+---
+
 ## P2-F 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P2-F = **CONDITIONAL PASS**，核准 **P2-F 階段**（投影工具、共用契約套件、十三支擴充性驗證）結案。

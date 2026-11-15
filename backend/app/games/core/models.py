@@ -11,6 +11,7 @@ from enum import Enum
 from uuid import UUID
 
 from app.games.core.card import Card
+from app.games.core.extensions import PublicExtension, check_public_extension
 
 type PlayerId = UUID
 
@@ -211,8 +212,10 @@ class GameState:
     rules_version: str
     public: PublicGameData
     private: PrivateGameData = field(repr=False)
+    extension: PublicExtension | None = None
 
     def __post_init__(self) -> None:
+        check_public_extension(self.extension, "extension")
         _uuid(self.session_id, "session_id")
         _text(self.game_type, "game_type")
         _text(self.rules_version, "rules_version")
@@ -235,8 +238,10 @@ class PlayerView:
     viewer_id: PlayerId
     public: PublicGameData
     private: PrivatePlayerData = field(repr=False)
+    extension: PublicExtension | None = None
 
     def __post_init__(self) -> None:
+        check_public_extension(self.extension, "extension")
         _uuid(self.viewer_id, "viewer_id")
         _exact_type(self.public, PublicGameData, "public")
         if not isinstance(self.private, PrivatePlayerData):

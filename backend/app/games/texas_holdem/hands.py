@@ -72,11 +72,40 @@ _TIEBREAK_LENGTH: dict[HandCategory, int] = {
 }
 
 
+def _descending(values: tuple[int, ...]) -> bool:
+    return all(earlier > later for earlier, later in zip(values, values[1:], strict=False))
+
+
+def _is_straight_run(values: tuple[int, ...]) -> bool:
+    return values == _WHEEL or (_descending(values) and values[0] - values[-1] == HAND_SIZE - 1)
+
+
+def _is_possible(category: HandCategory, tiebreak: tuple[int, ...]) -> bool:
+    """True exactly for tiebreaks an evaluated hand of this category can produce.
+
+    Assumes every value is already an int in 2-14 of the right length.
+    """
+    if category in (HandCategory.STRAIGHT, HandCategory.STRAIGHT_FLUSH):
+        return tiebreak[0] >= 5
+    if category in (HandCategory.FOUR_OF_A_KIND, HandCategory.FULL_HOUSE):
+        return tiebreak[0] != tiebreak[1]
+    if category in (HandCategory.FLUSH, HandCategory.HIGH_CARD):
+        return _descending(tiebreak) and not _is_straight_run(tiebreak)
+    if category is HandCategory.TWO_PAIR:
+        high, low, kicker = tiebreak
+        return high > low and kicker not in (high, low)
+    # one pair and three of a kind: a made rank followed by strictly descending kickers
+    made, kickers = tiebreak[0], tiebreak[1:]
+    return _descending(kickers) and made not in kickers
+
+
 @dataclass(frozen=True, slots=True)
 class HandRank:
     """Category plus tiebreak values (2-14, strongest first, never suits).
 
-    Wheel straights use 5 as their only tiebreak value.
+    Wheel straights use 5 as their only tiebreak value. Construction also rejects
+    tiebreaks no real hand of that category can have (for example a 2-high straight
+    or a full house of one rank), so an externally built HandRank is still plausible.
     """
 
     category: HandCategory
@@ -93,6 +122,8 @@ class HandRank:
             raise ValueError("tiebreak values must be between 2 and 14")
         if len(self.tiebreak) != _TIEBREAK_LENGTH[self.category]:
             raise ValueError("tiebreak length does not match the category")
+        if not _is_possible(self.category, self.tiebreak):
+            raise ValueError("tiebreak is impossible for this category")
 
     @property
     def sort_key(self) -> tuple[int, tuple[int, ...]]:

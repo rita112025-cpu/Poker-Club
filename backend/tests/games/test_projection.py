@@ -178,4 +178,4 @@ def test_events_reject_invalid_containers_and_subclass_elements() -> None:
     with pytest.raises(TypeError, match="invalid element"):
         events_for_viewer(cast(Any, (*good, None)), ALICE)
     with pytest.raises(TypeError, match="exact GameEvent"):
-        events_for_viewer((EventWithHand(5, "x", EventVisibility.PUBLIC, None, ALICE_HAND),), ALICE)
+        events_for_viewer((EventWithHand(5, "x", EventVisibility.PUBLIC, hand=ALICE_HAND),), ALICE)

@@ -74,6 +74,7 @@ def stub_scenario() -> ContractScenario[StubPayload]:
             _action(s, _turn_player(s), s.public.state_version + 5),
             StubPayload(1),
         ),
+        after_over=lambda s: (_action(s, ALICE), StubPayload(1)),
     )
 
 
@@ -198,6 +199,82 @@ class NeverGameOver(StubEngine):
         return False
 
 
+class LeaksCardInValidationError(StubEngine):
+    def validate_action(
+        self, state: GameState, action: GameAction, payload: StubPayload
+    ) -> ActionValidation:
+        out = super().validate_action(state, action, payload)
+        if out.error is not None:
+            hidden = state.private.players[1].hand[0]
+            return ActionValidation(
+                GameError(out.error.code, f"not allowed, Bob holds {hidden.code}")
+            )
+        return out
+
+
+class LeaksCardInResultError(StubEngine):
+    def calculate_result(self, state: GameState) -> GameResult | GameError:
+        out = super().calculate_result(state)
+        if isinstance(out, GameError):
+            return GameError(
+                out.code, f"unfinished; deck top is {state.private.remaining_cards[0]!r}"
+            )
+        return out
+
+
+class LeaksCardInViewError(StubEngine):
+    def get_player_view(self, state: GameState, viewer_id: UUID) -> PlayerView | GameError:
+        out = super().get_player_view(state, viewer_id)
+        if isinstance(out, GameError):
+            return GameError(
+                out.code, f"unknown viewer; Alice holds {state.private.players[0].hand[0].code}."
+            )
+        return out
+
+
+class NondeterministicApply(StubEngine):
+    calls = 0
+
+    def apply_action(
+        self, state: GameState, action: GameAction, payload: StubPayload
+    ) -> ApplyResult | GameError:
+        out = super().apply_action(state, action, payload)
+        if isinstance(out, ApplyResult):
+            type(self).calls += 1
+            event = GameEvent(type(self).calls, "moved", EventVisibility.PUBLIC)
+            return ApplyResult(out.state, (event,))
+        return out
+
+
+class NondeterministicResult(StubEngine):
+    calls = 0
+
+    def calculate_result(self, state: GameState) -> GameResult | GameError:
+        out = super().calculate_result(state)
+        if isinstance(out, GameResult):
+            type(self).calls += 1
+            return GameResult(
+                (PlayerResult(ALICE, type(self).calls, 1), PlayerResult(BOB, -type(self).calls, 2))
+            )
+        return out
+
+
+class AcceptsAfterGameOverForAlice(StubEngine):
+    def validate_action(
+        self, state: GameState, action: GameAction, payload: StubPayload
+    ) -> ActionValidation:
+        if state.public.status is GameStatus.FINISHED and action.player_id == ALICE:
+            return ActionValidation()
+        return super().validate_action(state, action, payload)
+
+    def apply_action(
+        self, state: GameState, action: GameAction, payload: StubPayload
+    ) -> ApplyResult | GameError:
+        if state.public.status is GameStatus.FINISHED and action.player_id == ALICE:
+            return ApplyResult(state, ())
+        return super().apply_action(state, action, payload)
+
+
 BROKEN: list[tuple[str, Callable[[], StubEngine]]] = [
     ("accepts test-only deck", AcceptsTestOnlyDeck),
     ("skips a version", SkipsVersion),
@@ -212,6 +289,12 @@ BROKEN: list[tuple[str, Callable[[], StubEngine]]] = [
     ("duplicates a card", DuplicatesACard),
     ("new game already over", NewGameAlreadyOver),
     ("never game over", NeverGameOver),
+    ("leaks a hidden card in a validation error", LeaksCardInValidationError),
+    ("leaks a deck card in a result error", LeaksCardInResultError),
+    ("leaks a hidden card in a view error", LeaksCardInViewError),
+    ("apply_action is not deterministic", NondeterministicApply),
+    ("calculate_result is not repeatable", NondeterministicResult),
+    ("accepts an action after game over", AcceptsAfterGameOverForAlice),
 ]
 
 
@@ -280,6 +363,7 @@ def test_protocol_and_suite_accept_a_different_payload_type() -> None:
         next_legal,
         illegal=lambda s: (_action(s, _other(s)), payload),
         stale=lambda s: (_action(s, _turn_player(s), s.public.state_version + 5), payload),
+        after_over=lambda s: (_action(s, ALICE), payload),
     )
     check_engine_contract(engine, scenario)
 
