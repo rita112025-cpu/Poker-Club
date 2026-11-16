@@ -1,4 +1,4 @@
-"""TexasEngine (P3-02): the six GameEngine methods for fold/check/call hands.
+"""TexasEngine (P3-02, P3-03): the six GameEngine methods for no-limit betting rounds.
 
 Not registered anywhere yet (Registry integration is P3-05). calculate_result reports
 "not implemented" until settlement exists (P3-04). Expected rejections are GameError data
@@ -31,14 +31,18 @@ from app.games.core.projection import project_player_view
 from app.games.core.validation import require_exact, require_nonnegative_int
 from app.games.texas_holdem.betting import (
     ALL_IN,
+    BET,
+    CALL,
     CHECK,
     FOLD,
     KNOWN_ACTIONS,
-    UNSUPPORTED_ACTIONS,
+    RAISE,
     advance,
     amount_to_call,
     legal_actions,
+    round_is_complete,
     seat_to_act,
+    stack_total,
 )
 from app.games.texas_holdem.events import ActionTaken
 from app.games.texas_holdem.hand import GAME_TYPE, start_hand, start_hand_for_testing
@@ -53,14 +57,15 @@ NOT_YOUR_TURN = "not_your_turn"
 UNKNOWN_ACTION = "unknown_action"
 BAD_PAYLOAD = "bad_payload"
 ILLEGAL_ACTION = "illegal_action"
-NOT_SUPPORTED_YET = "not_supported_yet"
+BAD_AMOUNT = "bad_amount"
 NOT_FINISHED = "not_finished"
 NOT_IMPLEMENTED = "not_implemented"
 
 
 @dataclass(frozen=True, slots=True)
 class TexasPayload:
-    """Action payload; amount is for bet/raise (P3-03) and must be None for the rest."""
+    """Action payload; amount (raise-to: the seat's total this round) is required for bet and
+    raise and must be None for every other action."""
 
     amount: int | None = None
 
@@ -82,13 +87,16 @@ class TexasEngine:
         return None
 
     def _normalise(self, created: GameState | GameError) -> GameState | GameError:
-        """If nobody can act at the start (everyone all-in), deal the board out now."""
-        if isinstance(created, GameError) or created.public.turn is not None:
+        """If no betting is possible at the start (everyone all-in, or the only seat that can
+        act has nothing to answer), deal the board out now."""
+        if isinstance(created, GameError):
             return created
         table = created.extension
         if not isinstance(table, TexasPublic):
             return created
-        return advance(created, table, self._rules.burn_cards, None, [])[0]
+        if created.public.turn is not None and not round_is_complete(table):
+            return created
+        return advance(created, table, self._rules.burn_cards, self._rules.big_blind, None, [])[0]
 
     def create_game(
         self,
@@ -122,7 +130,7 @@ class TexasEngine:
 
     def _decide(
         self, state: GameState, action: GameAction, payload: TexasPayload
-    ) -> GameError | str:
+    ) -> GameError | tuple[str, int | None]:
         require_exact(state, GameState, "state")
         require_exact(action, GameAction, "action")
         require_exact(payload, TexasPayload, "payload")
@@ -138,19 +146,26 @@ class TexasEngine:
         kind = action.type
         if kind not in KNOWN_ACTIONS:
             return GameError(UNKNOWN_ACTION, "Unknown action")
-        if kind in UNSUPPORTED_ACTIONS:
-            return GameError(NOT_SUPPORTED_YET, "Betting and raising are not supported yet")
-        if payload.amount is not None:
+        wants_amount = kind in (BET, RAISE)
+        if wants_amount and payload.amount is None:
+            return GameError(BAD_PAYLOAD, "This action needs an amount")
+        if not wants_amount and payload.amount is not None:
             return GameError(BAD_PAYLOAD, "This action takes no amount")
         legal = legal_actions(state)
         if legal is None:
             return GameError(GAME_OVER, "The hand is over")
-        if kind == ALL_IN and kind not in legal.kinds:
-            # an all-in larger than the call amount is a raise (or a bet): P3-03
-            return GameError(NOT_SUPPORTED_YET, "An all-in raise is not supported yet")
         if kind not in legal.kinds:
             return GameError(ILLEGAL_ACTION, "That action is not allowed now")
-        return kind
+        if wants_amount:
+            amount = payload.amount
+            if (
+                amount is None
+                or legal.min_to is None
+                or legal.max_to is None
+                or not legal.min_to <= amount <= legal.max_to
+            ):
+                return GameError(BAD_AMOUNT, "The amount is outside the allowed range")
+        return kind, payload.amount
 
     def validate_action(
         self, state: GameState, action: GameAction, payload: TexasPayload
@@ -168,13 +183,18 @@ class TexasEngine:
         seat = seat_to_act(state)
         if not isinstance(ext, TexasPublic) or seat is None:
             return GameError(GAME_OVER, "The hand is over")
+        kind, amount = decision
         paid = 0
-        if decision == FOLD:
+        current_bet = ext.current_bet
+        min_raise = ext.min_raise
+        owed = amount_to_call(ext, seat)
+        total = stack_total(seat)
+        if kind == FOLD:
             updated = replace(seat, folded=True)
-        elif decision == CHECK:
-            updated = replace(seat, acted=True)
-        else:  # call, or an all-in that does not exceed the call amount
-            paid = min(amount_to_call(ext, seat), seat.stack)
+        elif kind == CHECK:
+            updated = replace(seat, acted=True, bet_seen=ext.current_bet)
+        elif kind == CALL or (kind == ALL_IN and total <= ext.current_bet):
+            paid = min(owed, seat.stack)  # a short call puts in everything it has
             stack = seat.stack - paid
             updated = replace(
                 seat,
@@ -183,6 +203,24 @@ class TexasEngine:
                 street_committed=seat.street_committed + paid,
                 acted=True,
                 all_in=stack == 0,
+                bet_seen=ext.current_bet,
+            )
+        else:  # bet, raise, or an all-in that exceeds the call amount
+            target = amount if kind in (BET, RAISE) and amount is not None else total
+            paid = target - seat.street_committed
+            stack = seat.stack - paid
+            increment = target - ext.current_bet
+            if increment >= ext.min_raise:  # a full raise sets the new minimum increment
+                min_raise = increment
+            current_bet = target
+            updated = replace(
+                seat,
+                stack=stack,
+                committed=seat.committed + paid,
+                street_committed=target,
+                acted=True,
+                all_in=stack == 0,
+                bet_seen=target,
             )
         seats = tuple(updated if s.seat == seat.seat else s for s in ext.seats)
         # The table data after the action; a lone survivor already marks the hand as ended.
@@ -191,6 +229,8 @@ class TexasEngine:
             ext,
             seats=seats,
             pot=ext.pot + paid,
+            current_bet=current_bet,
+            min_raise=min_raise,
             ended=HandEnd.LAST_STANDING if lone else ext.ended,
         )
         base_seq = ext.event_seq
@@ -198,8 +238,9 @@ class TexasEngine:
             state,
             after,
             self._rules.burn_cards,
+            self._rules.big_blind,
             seat.seat,
-            [ActionTaken(seat.seat, decision, paid)],
+            [ActionTaken(seat.seat, kind, paid, updated.street_committed)],
         )
         events = tuple(
             GameEvent(base_seq + index, type(item).__name__, EventVisibility.PUBLIC, payload=item)

@@ -1,5 +1,125 @@
 # Phase 2 進度報告
 
+## P3-03 正式結案決議 — CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P3-03 = **CONDITIONAL PASS**，核准 **P3-03 階段**（無限注下注規則：bet、raise、all-in、最小加注、重新開放，以及建局時一輪無須行動的統一處理）結案。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 P3-04，未做任何 Git 寫入。
+注意：P3-03 的實作與文件尚未提交。
+
+### 驗收範圍與獨立複驗結果
+
+- 範圍：`texas_holdem/betting.py`、`engine.py`、`events.py`、`state.py`、`hand.py` 的變更與 `test_texas_raising.py`、既有測試的調整。
+- 獨立複驗：核心、`hands.py`、`positions.py`、`rules.py`、migration 與 P3-02 證據相對 HEAD 無差異；P3-03 證據 39 個來源雜湊、九份舊證據雜湊與 20 項檢查退出碼皆吻合。
+- Backend：**598 passed、5 skipped**（重跑 4 次穩定）；5 項 PostgreSQL 測試**尚未驗證通過**。Mypy、Ruff、格式檢查通過。
+- 獨立參考模擬器（待回應佇列加「面對的下注成長量」，與引擎的已行動旗標加 `bet_seen` 寫法不同）逐步比對：
+  8000 局隨機對局、47,265 次決策，合法動作種類、最小與最大金額、跟注額、輪到的座位、籌碼、本街投入額、目前下注、最低增量，以及結束時的公共牌、結束方式、籌碼與投入額全部一致；
+  24,540 次非法金額嘗試皆被拒絕且狀態不變；盲注結構 1/2、25/50、3/7 各 2500 局亦全部一致。
+- 作者的 27 種變異**未逐一重跑**：獨立抽驗 6 種，3 種被抓到、1 種為等價變異（我設計不佳）、2 種揭露下述覆蓋缺口。
+- 歷史紀錄與各階段證據皆保留，未覆寫。
+
+### 保留條件
+
+1. **專案測試覆蓋缺口（建議補強）**：
+   - 所有專案測試只用 5/10 盲注，「翻牌前最低加注的基準寫死為 10」的變異未被抓到；引擎本身正確，但日後回歸不會被發現。需補不同盲注結構的測試。
+   - 「判斷對手能否行動時把已棄牌座位算進去」的變異未被抓到；需補情境測試：4 人桌，UTG 棄牌，小盲與大盲短籌碼 all-in，按鈕位只能跟注或棄牌。
+2. **獨立性有限**：參考模擬器寫法不同，但規則選擇與引擎出自同一份理解（累計式重新開放、對手全 all-in 或棄牌時不可下注或加注、大盲不足額的最低加注基準、「加到」金額）。這些仍是待人工確認的決策，不是規格內容。
+3. **未被跟注的部分**：下注或加注超過任何人跟注的額度時，多出的部分目前留在底池，須在 P3-04 結算時退回。
+4. 燒牌、盲注、籌碼的正式值與標準德州預設仍待人工確認；建局時一輪無須行動即發完各街（事件不回傳、燒掉的牌不保留）。
+5. 契約套件的措辭偵測仍為啟發式；擴充註冊不檢查 `__post_init__` 內容品質；擴充白名單為全域。
+6. 沿用前幾階段的信任限制。
+
+### P2-A 持續開放事項（仍未完成）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險：P3-00 已修補並通過複驗，是否正式標為已解決由人工決定。
+- [ ] test-only Deck 與正式引擎的隔離：僅緩解，仍開放。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制：仍開放。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口：仍開放。
+
+### 尚未驗收（P3-03 通過不代表已完成）
+
+- 七選五、邊池、結算、未被跟注部分的退回、攤牌亮牌與蓋牌（P3-04）。
+- Registry 登記與含結果的完整契約（P3-05）。
+- Room、GameSession、認證與授權、傳輸層、資料庫整合；PostgreSQL 測試（5 項 skipped）。
+
+---
+
+## P3-03 德州無限注下注規則（bet、raise、all-in、最小加注、重新開放） — 已人工驗收（見上方結案決議）
+
+日期：2026-11-16（Asia/Taipei）。依 P3-03 規劃 7 項決策（照建議）實作。
+**未開始 P3-04**：沒有七選五、邊池、結算、攤牌亮牌與未被跟注部分的退回；`TexasEngine` 未登記進 Registry；未 commit。
+
+### 採用的決策
+
+1. `bet`、`raise` 的 `amount` 為「加到」：該玩家本街投入的**總額**。
+2. 最低下注＝大盲；最低加注增量＝上一次完整加注的大小（至少大盲），每街重置為大盲。
+3. 重新開放規則（累計式）：每個座位記下上次行動時面對的最高下注（`bet_seen`）；只有當下注自那時起增加至少一個最低增量，該座位才能再加注。
+   單一短額 all-in 不重新開放；多個短額 all-in 累計達到一個完整加注則會重新開放。
+4. 大盲不足額時，翻牌前最低加注到 max(目前下注, 大盲) 加上最低增量。
+5. 批准統一建局行為：建局後若這一輪已無須行動（例如唯一可行動的座位無須回應），直接發完剩餘各街（處理 P3-02 保留條件 1）。
+6. `ActionTaken` 新增 `total`（本街總額，必填）。
+7. 燒牌、盲注、籌碼的正式值仍待確認（P3-03 不依賴，測試仍用暫定值）。
+
+### 規則細節（實作時的明確選擇）
+
+- `all_in`：總額不超過跟注額＝不足額跟注（同跟注）；超過＝加注。增量不小於最低增量為完整加注並更新最低增量，否則為短額加注，不更新。
+- 下注或加注到恰好等於全部籌碼，視為 all-in。
+- **對手全部 all-in 或棄牌時，該座位不能下注或加注**（無人可對抗），只能跟注或棄牌；此為本次的明確選擇，規格未定義。
+- 能過牌時可棄牌；翻牌前大盲保有選擇權，可過牌或加注。
+- 新增錯誤碼 `bad_amount`（金額超出允許範圍）；`bad_payload` 用於缺少或多餘的金額；`not_supported_yet` 已移除。
+
+### 契約與狀態變更
+
+- `SeatState.bet_seen`；`TexasPublic.min_raise`（建局時為大盲）並新增不變式：`min_raise ≥ 1`、任一座位的 `bet_seen` 不得高於 `current_bet`。
+- `LegalActions` 新增 `min_to`、`max_to`（bet／raise 的合法範圍，含邊界）。
+- `betting.advance` 與 `legal_actions` 的簽章調整；`create_game` 在創建時判斷一輪是否已完成。
+- 既有測試調整：`test_texas_engine.py`（原「尚未支援」期望改為新規則、事件加 `total`、隨機對局加入下注與加注）、`test_texas_setup.py`（欄位矩陣補新欄位）。
+
+### 新增與測試
+
+- `test_texas_raising.py` 19 項（手算情境）：單挑下注、加注與短額 all-in 鏈；金額邊界含上下限；加到全部籌碼；翻牌前再加注鏈的最低增量更新；大盲不足額；短額 all-in 下注不改最低增量；
+  對手全 all-in 不可加注；經典情境（下注 100、加到 300、短額 all-in 到 350：加注者不能再加注、原下注者可以）；完整加注後重新開放；多個短額 all-in 累計重新開放（4 人桌）；大盲選擇權與過牌加注；每街重置；
+  所有非法金額與 payload 皆拒絕且不改狀態；建局時無須行動的局面直接發完；契約套件在含下注與加注的腳本下通過。
+- 隨機對局（1500 局）現在包含 bet、raise（超過 500 次）：每步積分守恆、牌不重複、街內下注與最低增量不遞減、輪到者可行動、決定性、必定結束。
+- 副本上 27 種變異：24 種被抓到；`total>=needed -> >` 與 `bet_seen invariant off` 最初存活，補測試後被抓到；
+  `bet_seen not set on check` 為在可達狀態下的等價變異（過牌時面對的下注之後無人能再加注）。
+
+### 實際結果
+
+環境：3.12.10，Windows-11-10.0.26300-SP0，PYTHONDONTWRITEBYTECODE=1、PYTEST_DISABLE_PLUGIN_AUTOLOAD=1。
+- P3-03 texas raising：exit 0；19 passed in 1.33s
+- P3-02 texas engine：exit 0；30 passed in 5.57s
+- P3-01 texas setup：exit 0；59 passed in 0.46s
+- P3-00 extensions：exit 0；21 passed in 0.12s
+- P3-00 deck failure and isolation：exit 0；7 passed in 0.89s
+- P2-F projection：exit 0；15 passed in 0.12s
+- P2-F contract suite：exit 0；31 passed in 0.85s
+- P2-E texas hands：exit 0；55 passed in 3.18s
+- P2-D registry：exit 0；34 passed in 0.15s
+- P2-C engine contract：exit 0；28 passed in 0.16s
+- R2 public field matrix：exit 0；25 passed in 0.11s
+- R1 public isolation：exit 0；19 passed in 0.11s
+- Original P2-B regression：exit 0；124 passed in 2.06s
+- P2-A regression：exit 0；127 passed in 0.21s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.89s
+- Mypy：exit 0；Success: no issues found in 46 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；53 files already formatted
+- Full backend suite：exit 0；598 passed, 5 skipped, 1 warning in 15.64s
+- pip check：exit 0；No broken requirements found.
+
+完整 backend **598 passed、5 skipped**（578＋20；連跑 3 次穩定；5 項 PostgreSQL 測試仍未驗證通過）。證據檔 `P3_03_TEST_EVIDENCE.json`；
+`betting.py` SHA-256 `869a0bb7e383a207994d46c39d7a8193ab3e3345f64304b440b506176e12c5db`；`engine.py` `c9f29f764b0a5542d87d654afa97bf4a17c2065ac7813d60df3e992238b73a69`；`state.py` `5b63687e181cacc2e3b8eaef8085975ffae50182c70a7c0e2cd8e705da13222b`；`test_texas_raising.py` `3173553534d336c2dc977d67a7e0d90d37422a03c57b98b4a3b4a17543b9a452`。
+B／R1／R2／C／D／E／F／P3-00／P3-01／P3-02 證據未覆寫。
+
+### 尚未解決的限制
+
+- 七選五、邊池、結算、未被跟注部分的退回、攤牌亮牌與蓋牌（P3-04）；Registry 登記與含結果的完整契約（P3-05）。
+- 累計式重新開放、「對手全 all-in 不可加注」、大盲不足額的最低加注等為明確選擇而非規格內容，仍待人工確認；燒牌、盲注、籌碼的正式值亦待確認。
+- 獨立參考模擬器尚未針對加注規則重做（待獨立複驗）；`bet_seen` 的過牌記錄在可達狀態下無可觀察效果。
+- 契約套件的措辭偵測仍為啟發式；P2-A 風險 2、3、4 與 PostgreSQL 5 項測試仍開放；Room、GameSession、認證、傳輸與資料庫整合未實作。P3-03 是否結案須人工獨立驗收。
+
+---
+
 ## P3-02 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P3-02 = **CONDITIONAL PASS**，核准 **P3-02 階段**（棄牌、過牌、跟注、不足額 all-in 的街狀態機與引擎，含 P3-02-0 核心擴充一致性檢查）結案。

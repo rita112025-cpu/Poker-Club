@@ -113,6 +113,7 @@ def _start(
         (),
         sum(posted.values()),
         max(posted.values()),
+        min_raise=rules.big_blind,
     )
     public = PublicGameData(
         GameStatus.IN_PROGRESS,

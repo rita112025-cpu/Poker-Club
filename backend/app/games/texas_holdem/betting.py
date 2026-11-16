@@ -1,15 +1,23 @@
-"""Street machine and legal actions for a Texas hand (P3-02). Pure functions.
+"""Street machine, legal actions and no-limit raising rules for a Texas hand (P3-02/P3-03).
 
-Scope: fold, check, call and the short all-in (an all-in that does not exceed the call
-amount, which behaves exactly like a call). bet, raise and an all-in that exceeds the call
-amount need the minimum-raise and re-opening rules of P3-03, so they are recognised and
-rejected with NOT_SUPPORTED_YET instead of guessing a rule.
+Amounts for bet and raise are "raise-to": the seat's TOTAL commitment this betting round.
+The minimum bet is the big blind. The minimum raise increment is the size of the last full
+raise (at least the big blind) and resets to the big blind every street. A bet or raise
+(including an all-in that exceeds the call amount) is "full" when its increment is at least
+the minimum raise increment; a smaller all-in is a short raise: it raises the amount to call
+but changes neither the minimum increment nor who may raise.
+Re-opening: each seat remembers the current bet it last faced (bet_seen). It may raise again
+only if the bet has grown by at least the minimum increment since then, so one short all-in
+does not re-open the betting but several short all-ins that add up to a full raise do.
+There is no maximum except the seat's stack. Before the flop, if the big blind posted less
+than the big blind, the minimum raise-to is still the big blind plus the minimum increment.
 
-A betting round is complete when every live seat that can still act has acted and has
-matched the current bet. The big blind therefore keeps its option before the flop. With
-fewer than two seats able to act there is no betting: remaining streets are dealt out.
-Folding is always allowed, even when a check is possible. Burning is controlled by the
-rules (one card before the flop, turn and river).
+A betting round is complete when every live seat that can still act has acted and matched
+the current bet. The big blind keeps its option before the flop. With fewer than two seats
+able to act there is no betting: remaining streets are dealt out (also when the round is
+already complete at the start of the hand). Folding is always allowed, even when a check is
+possible. A seat whose opponents are all all-in (or folded) cannot bet or raise.
+Burning is controlled by the rules.
 """
 
 from dataclasses import dataclass, replace
@@ -28,7 +36,6 @@ ALL_IN = "all_in"
 BET = "bet"
 RAISE = "raise"
 KNOWN_ACTIONS = (FOLD, CHECK, CALL, ALL_IN, BET, RAISE)
-UNSUPPORTED_ACTIONS = (BET, RAISE)
 
 _STREET_AFTER = {
     Street.PRE_FLOP: Street.FLOP,
@@ -41,6 +48,9 @@ _STREET_AFTER = {
 class LegalActions:
     kinds: tuple[str, ...]
     to_call: int
+    # Inclusive raise-to range for bet/raise; None when neither is available.
+    min_to: int | None = None
+    max_to: int | None = None
 
 
 def can_act(seat: SeatState) -> bool:
@@ -59,6 +69,24 @@ def seat_to_act(state: GameState) -> SeatState | None:
     return next((s for s in ext.seats if s.player_id == turn.player_id), None)
 
 
+def stack_total(seat: SeatState) -> int:
+    """The most this seat can have committed this round (its all-in total)."""
+    return seat.stack + seat.street_committed
+
+
+def can_raise(ext: TexasPublic, seat: SeatState) -> bool:
+    """Whether the bet is open to this seat: it has not acted, or the bet has grown by a
+    full minimum raise since it last acted."""
+    return not seat.acted or ext.current_bet - seat.bet_seen >= ext.min_raise
+
+
+def minimum_raise_to(ext: TexasPublic) -> int:
+    base = ext.current_bet
+    if ext.street is Street.PRE_FLOP:
+        base = max(base, ext.min_raise)  # min_raise is the big blind until a full raise
+    return base + ext.min_raise
+
+
 def legal_actions(state: GameState) -> LegalActions | None:
     """What the player to act may do now (None when nobody is to act)."""
     ext = state.extension
@@ -70,10 +98,21 @@ def legal_actions(state: GameState) -> LegalActions | None:
     ):
         return None
     owed = amount_to_call(ext, seat)
+    total = stack_total(seat)
     kinds = [FOLD, CHECK if owed == 0 else CALL]
-    if owed > 0 and seat.stack <= owed:
-        kinds.append(ALL_IN)
-    return LegalActions(tuple(kinds), owed)
+    low: int | None = None
+    high: int | None = None
+    opponents_can_act = any(can_act(s) for s in ext.seats if s.seat != seat.seat)
+    if total > ext.current_bet and can_raise(ext, seat) and opponents_can_act:
+        kinds.append(ALL_IN)  # an all-in that exceeds the call amount is a raise
+        needed = minimum_raise_to(ext)
+        if total >= needed:
+            kinds.append(BET if ext.current_bet == 0 else RAISE)
+            low, high = needed, total
+    elif owed > 0 and seat.stack <= owed:
+        kinds.append(ALL_IN)  # a short call
+    # With every opponent all-in or folded there is nobody to raise against: only call or fold.
+    return LegalActions(tuple(kinds), owed, low, high)
 
 
 def _needs_action(ext: TexasPublic, seat: SeatState) -> bool:
@@ -93,8 +132,19 @@ def _clockwise_from(ext: TexasPublic, seat_number: int | None) -> list[SeatState
     return order
 
 
+def round_is_complete(ext: TexasPublic) -> bool:
+    """True when the current betting round needs no further action."""
+    live = [s for s in ext.seats if not s.folded]
+    able = [s for s in live if not s.all_in]
+    return (
+        not able
+        or not any(_needs_action(ext, s) for s in able)
+        or (len(able) == 1 and able[0].street_committed >= ext.current_bet)
+    )
+
+
 def _deal_next_street(
-    ext: TexasPublic, remaining: tuple[Card, ...], burn: bool
+    ext: TexasPublic, remaining: tuple[Card, ...], burn: bool, big_blind: int
 ) -> tuple[TexasPublic, tuple[Card, ...], tuple[Card, ...]]:
     street = _STREET_AFTER[ext.street]
     skip = 1 if burn else 0
@@ -102,8 +152,15 @@ def _deal_next_street(
     if len(remaining) < skip + count:
         raise ValueError("not enough cards left to deal the street")
     cards = remaining[skip : skip + count]
-    fresh = tuple(replace(s, street_committed=0, acted=False) for s in ext.seats)
-    updated = replace(ext, street=street, board=ext.board + cards, seats=fresh, current_bet=0)
+    fresh = tuple(replace(s, street_committed=0, acted=False, bet_seen=0) for s in ext.seats)
+    updated = replace(
+        ext,
+        street=street,
+        board=ext.board + cards,
+        seats=fresh,
+        current_bet=0,
+        min_raise=big_blind,
+    )
     return updated, remaining[skip + count :], cards
 
 
@@ -111,6 +168,7 @@ def advance(
     state: GameState,
     ext: TexasPublic,
     burn: bool,
+    big_blind: int,
     actor_seat: int | None,
     payloads: list[EventPayload],
 ) -> tuple[GameState, list[EventPayload]]:
@@ -133,12 +191,7 @@ def advance(
             status = GameStatus.FINISHED
             break
         able = [s for s in live if not s.all_in]
-        complete = (
-            not able
-            or not any(_needs_action(ext, s) for s in able)
-            or (len(able) == 1 and able[0].street_committed >= ext.current_bet)
-        )
-        if not complete:
+        if not round_is_complete(ext):
             chosen = next(
                 s for s in _clockwise_from(ext, actor_seat) if can_act(s) and _needs_action(ext, s)
             )
@@ -149,7 +202,7 @@ def advance(
             events.append(HandEnded(HandEnd.SHOWDOWN))
             status = GameStatus.FINISHED
             break
-        ext, remaining, cards = _deal_next_street(ext, remaining, burn)
+        ext, remaining, cards = _deal_next_street(ext, remaining, burn, big_blind)
         events.append(StreetDealt(ext.street, cards))
         actor_seat = None
         if len(able) >= 2:

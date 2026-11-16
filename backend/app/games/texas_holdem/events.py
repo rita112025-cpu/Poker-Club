@@ -21,11 +21,15 @@ class ActionTaken(EventPayload):
     seat: int
     action: str
     amount: int  # chips paid by this action (0 for fold and check)
+    total: int  # the seat's total commitment this betting round after the action
 
     def __post_init__(self) -> None:
         require_nonnegative_int(self.seat, "seat")
         require_text(self.action, "action")
         require_nonnegative_int(self.amount, "amount")
+        require_nonnegative_int(self.total, "total")
+        if self.total < self.amount:
+            raise ValueError("a round total cannot be below the chips just paid")
 
 
 @register_event_payload

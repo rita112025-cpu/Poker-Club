@@ -216,6 +216,7 @@ MATRICES[SeatState] = FieldMatrix(
         "folded": "bool",
         "street_committed": "nonneg_int",
         "acted": "bool",
+        "bet_seen": "nonneg_int",
     },
     {
         "all_in": [True],  # all-in while chips remain
@@ -236,8 +237,10 @@ MATRICES[TexasPublic] = FieldMatrix(
         "current_bet": "nonneg_int",
         "ended": "enum",
         "event_seq": "nonneg_int",
+        "min_raise": "nonneg_int",
     },
     {
+        "min_raise": [0],
         "ended": [HandEnd.LAST_STANDING, HandEnd.SHOWDOWN, SeatState],
         "current_bet": [9, 11],
         "street": [SeatState, Street.FLOP, Street.SHOWDOWN],
@@ -251,8 +254,9 @@ MATRICES[TexasPublic] = FieldMatrix(
 
 
 MATRICES[ActionTaken] = FieldMatrix(
-    lambda **kw: ActionTaken(**{"seat": 1, "action": "call", "amount": 5, **kw}),
-    {"seat": "nonneg_int", "action": "text", "amount": "nonneg_int"},
+    lambda **kw: ActionTaken(**{"seat": 1, "action": "call", "amount": 5, "total": 5, **kw}),
+    {"seat": "nonneg_int", "action": "text", "amount": "nonneg_int", "total": "nonneg_int"},
+    {"total": [4]},
 )
 MATRICES[StreetDealt] = FieldMatrix(
     lambda **kw: StreetDealt(
@@ -546,3 +550,12 @@ def test_a_table_with_one_live_seat_must_say_the_hand_has_ended() -> None:
     assert ok.ended is HandEnd.LAST_STANDING
     with pytest.raises(ValueError, match="exactly one live seat"):
         texas_public(ended=HandEnd.LAST_STANDING)
+
+
+def test_a_seat_cannot_have_seen_a_bet_higher_than_the_current_bet() -> None:
+    seats = texas_public().seats
+    raised = (seats[0], seats[1], replace(seats[2], bet_seen=11))
+    with pytest.raises(ValueError, match="seen a bet higher"):
+        texas_public(seats=raised)
+    ok = (seats[0], seats[1], replace(seats[2], bet_seen=10))
+    assert texas_public(seats=ok).seats[2].bet_seen == 10

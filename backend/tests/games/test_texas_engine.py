@@ -106,6 +106,17 @@ def act(
     return result.state, tuple(e.payload for e in result.events)
 
 
+def pick_move(generator: random.Random, legal: Any) -> tuple[str, TexasPayload]:
+    options = [k for k in legal.kinds if k != "fold"] or ["fold"]
+    kind = "fold" if generator.random() < 0.12 else generator.choice(options)
+    if kind in ("bet", "raise"):
+        amount = generator.choice(
+            [legal.min_to, legal.max_to, generator.randint(legal.min_to, legal.max_to)]
+        )
+        return kind, TexasPayload(amount)
+    return kind, NONE
+
+
 def error_of(
     engine: TexasEngine,
     state: GameState,
@@ -144,7 +155,8 @@ def test_legal_actions_in_representative_spots() -> None:
     _, state = new_hand({0: 100, 1: 100, 2: 100}, 0)
     assert turn_seat(state) == 0
     legal = legal_actions(state)
-    assert legal is not None and legal.kinds == ("fold", "call") and legal.to_call == 10
+    assert legal is not None and legal.kinds == ("fold", "call", "all_in", "raise")
+    assert legal.to_call == 10 and (legal.min_to, legal.max_to) == (20, 100)
     # a short stack facing 10 may call all-in
     _, short = new_hand({0: 8, 1: 100, 2: 100}, 0)
     legal = legal_actions(short)
@@ -160,12 +172,14 @@ def test_big_blind_keeps_its_option_and_postflop_spots_allow_check_or_fold() -> 
     state, _ = act(engine, state, "call")  # seat 0
     state, _ = act(engine, state, "call")  # seat 1 (small blind completes)
     assert turn_seat(state) == 2 and ext(state).street is Street.PRE_FLOP
-    legal = legal_actions(state)
-    assert legal is not None and legal.kinds == ("fold", "check") and legal.to_call == 0
+    legal = legal_actions(state)  # the option: check, or raise to at least 20
+    assert legal is not None and legal.kinds == ("fold", "check", "all_in", "raise")
+    assert legal.to_call == 0 and (legal.min_to, legal.max_to) == (20, 100)
     state, _ = act(engine, state, "check")
     assert ext(state).street is Street.FLOP and turn_seat(state) == 1
-    legal = legal_actions(state)
-    assert legal is not None and legal.kinds == ("fold", "check")
+    legal = legal_actions(state)  # nothing bet yet: check, or bet at least the big blind
+    assert legal is not None and legal.kinds == ("fold", "check", "all_in", "bet")
+    assert (legal.min_to, legal.max_to) == (10, 90)
 
 
 def test_no_legal_actions_once_the_hand_is_over() -> None:
@@ -184,15 +198,21 @@ def test_rejections_use_stable_codes_and_never_change_the_state() -> None:
     assert error_of(engine, state, "fold", TexasPayload(5)).code == "bad_payload"
     assert error_of(engine, state, "call", player=pid(1)).code == "not_your_turn"
     assert error_of(engine, state, "call", version=7).code == "stale_state"
-    for kind in ("bet", "raise"):
-        assert error_of(engine, state, kind, TexasPayload(40)).code == "not_supported_yet"
-    # an all-in larger than the call amount would be a raise: not supported yet
-    assert error_of(engine, state, "all_in").code == "not_supported_yet"
+    assert (
+        error_of(engine, state, "bet", TexasPayload(40)).code == "illegal_action"
+    )  # a bet is open
+    assert error_of(engine, state, "raise").code == "bad_payload"  # no amount
+    assert error_of(engine, state, "raise", TexasPayload(19)).code == "bad_amount"  # below 20
+    assert error_of(engine, state, "raise", TexasPayload(101)).code == "bad_amount"  # above stack
+    assert error_of(engine, state, "raise", TexasPayload(0)).code == "bad_amount"
     state, _ = act(engine, state, "call")
     state, _ = act(engine, state, "call")
     state, _ = act(engine, state, "check")  # flop, seat 1 to act with nothing owed
     assert error_of(engine, state, "call").code == "illegal_action"
-    assert error_of(engine, state, "all_in").code == "not_supported_yet"
+    assert error_of(engine, state, "raise", TexasPayload(40)).code == "illegal_action"  # no bet yet
+    assert error_of(engine, state, "bet").code == "bad_payload"
+    assert error_of(engine, state, "bet", TexasPayload(9)).code == "bad_amount"  # below the blind
+    assert error_of(engine, state, "bet", TexasPayload(91)).code == "bad_amount"  # above the stack
     for _ in range(3):  # checks to the river, then the showdown
         state, _ = act(engine, state, "check")
         state, _ = act(engine, state, "check")
@@ -231,10 +251,10 @@ def test_heads_up_check_down_with_known_board_and_events() -> None:
     engine, state = new_hand({0: 100, 1: 100}, 0)
     assert turn_seat(state) == 0
     state, events = act(engine, state, "call")
-    assert events == (ActionTaken(0, "call", 5),) and turn_seat(state) == 1
+    assert events == (ActionTaken(0, "call", 5, 10),) and turn_seat(state) == 1
     state, events = act(engine, state, "check")  # the big blind's option
     assert events == (
-        ActionTaken(1, "check", 0),
+        ActionTaken(1, "check", 0, 10),
         StreetDealt(Street.FLOP, cards("10S", "9S", "8S")),
     )
     assert ext(state).street is Street.FLOP and turn_seat(state) == 1  # big blind first
@@ -269,7 +289,9 @@ def test_three_handed_call_through_and_big_blind_option() -> None:
     engine, state = new_hand({0: 100, 1: 100, 2: 100}, 0)
     state, _ = act(engine, state, "call")  # seat 0
     state, events = act(engine, state, "call")  # seat 1 completes the small blind
-    assert events == (ActionTaken(1, "call", 5),) and turn_seat(state) == 2  # option, no street yet
+    assert (
+        events == (ActionTaken(1, "call", 5, 10),) and turn_seat(state) == 2
+    )  # option, no street yet
     state, events = act(engine, state, "check")
     assert events[-1] == StreetDealt(Street.FLOP, cards("8S", "7S", "6S"))  # six hole cards
     assert ext(state).pot == 30 and [turn_seat(state)] == [1]  # first live seat left of the button
@@ -291,7 +313,7 @@ def test_fold_on_the_flop_ends_the_hand_without_a_showdown() -> None:
     state, _ = act(engine, state, "call")
     state, _ = act(engine, state, "check")
     state, events = act(engine, state, "fold")  # big blind folds first on the flop
-    assert events == (ActionTaken(1, "fold", 0), HandEnded(HandEnd.LAST_STANDING))
+    assert events == (ActionTaken(1, "fold", 0, 0), HandEnded(HandEnd.LAST_STANDING))
     table = ext(state)
     assert (
         table.street is Street.FLOP
@@ -303,7 +325,7 @@ def test_fold_on_the_flop_ends_the_hand_without_a_showdown() -> None:
 def test_short_all_in_call_keeps_the_hand_going_for_the_others() -> None:
     engine, state = new_hand({0: 8, 1: 100, 2: 100}, 0)
     state, events = act(engine, state, "all_in")  # seat 0 pays only 8 of the 10
-    assert events == (ActionTaken(0, "all_in", 8),) and turn_seat(state) == 1
+    assert events == (ActionTaken(0, "all_in", 8, 8),) and turn_seat(state) == 1
     seat0 = next(s for s in ext(state).seats if s.seat == 0)
     assert seat0.all_in and seat0.stack == 0 and seat0.committed == 8
     state, _ = act(engine, state, "call")
@@ -510,6 +532,9 @@ def check_invariants(state: GameState, previous: GameState | None, total: int) -
         assert state.public.state_version == previous.public.state_version + 1
         assert table.event_seq > ext(previous).event_seq
         assert set(ext(previous).board) <= set(table.board)  # the board only grows
+        if ext(previous).street is table.street:  # within a street both only grow
+            assert table.current_bet >= ext(previous).current_bet
+            assert table.min_raise >= ext(previous).min_raise
         assert all(
             a.committed >= b.committed
             for a, b in zip(table.seats, ext(previous).seats, strict=True)
@@ -523,7 +548,7 @@ def check_invariants(state: GameState, previous: GameState | None, total: int) -
 def test_random_playouts_always_finish_with_valid_states() -> None:
     generator = random.Random(20261116)
     endings: set[HandEnd] = set()
-    runouts = short_calls = 0
+    runouts = short_calls = raises = 0
     for _ in range(1500):
         count = generator.randint(2, 9)
         seats = sorted(generator.sample(range(12), count))
@@ -537,9 +562,7 @@ def test_random_playouts_always_finish_with_valid_states() -> None:
                 break
             legal = legal_actions(state)
             assert legal is not None
-            options = [k for k in legal.kinds if k != "fold"] or ["fold"]
-            kind = "fold" if generator.random() < 0.12 else generator.choice(options)
-            kind = generator.choice(legal.kinds) if kind not in legal.kinds else kind
+            kind, move = pick_move(generator, legal)
             previous = state
             assert state.public.turn is not None
             action = GameAction(
@@ -548,19 +571,20 @@ def test_random_playouts_always_finish_with_valid_states() -> None:
                 state.public.state_version,
                 kind,
             )
-            repeat = engine.apply_action(state, action, NONE)
-            assert repeat == engine.apply_action(state, action, NONE)  # deterministic
+            repeat = engine.apply_action(state, action, move)
+            assert repeat == engine.apply_action(state, action, move)  # deterministic
             assert not isinstance(repeat, GameError), repeat
             state = repeat.state
             check_invariants(state, previous, total)
             kinds = [type(e.payload) for e in repeat.events]
             runouts += kinds.count(StreetDealt) >= 2
             short_calls += kind == "all_in"
+            raises += kind in ("bet", "raise")
         else:
             raise AssertionError("a hand did not finish")
         endings.add(ext(state).ended)
     assert endings == {HandEnd.LAST_STANDING, HandEnd.SHOWDOWN}
-    assert runouts > 50 and short_calls > 50  # the interesting paths really were exercised
+    assert runouts > 50 and short_calls > 50 and raises > 500  # the paths were exercised
 
 
 def test_rejected_actions_in_random_states_never_change_them() -> None:
@@ -584,7 +608,8 @@ def test_rejected_actions_in_random_states_never_change_them() -> None:
                 )
                 assert isinstance(engine.apply_action(state, action, NONE), GameError)
                 assert state == before
-            state, _ = act(engine, state, generator.choice(legal_actions(state).kinds))  # type: ignore[union-attr]
+            kind, move = pick_move(generator, legal_actions(state))
+            state, _ = act(engine, state, kind, move)
 
 
 def test_projection_of_every_state_in_a_hand_is_valid_for_every_player() -> None:

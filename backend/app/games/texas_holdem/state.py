@@ -59,6 +59,9 @@ class SeatState:
     folded: bool
     street_committed: int = 0  # chips put in during the current betting round
     acted: bool = False  # has acted in this round (blinds alone do not count)
+    # The current bet this seat faced (or made) when it last acted this round. A seat may
+    # raise again only if the bet has since grown by at least the minimum raise.
+    bet_seen: int = 0
 
     def __post_init__(self) -> None:
         require_nonnegative_int(self.seat, "seat")
@@ -69,6 +72,7 @@ class SeatState:
         require_bool(self.folded, "folded")
         require_nonnegative_int(self.street_committed, "street_committed")
         require_bool(self.acted, "acted")
+        require_nonnegative_int(self.bet_seen, "bet_seen")
         if self.all_in != (self.stack == 0):
             raise ValueError("a seat is all-in exactly when it has no chips left")
         if self.all_in and self.folded:
@@ -90,6 +94,7 @@ class TexasPublic(PublicExtension):
     current_bet: int  # the highest street_committed this round
     ended: HandEnd = HandEnd.NONE
     event_seq: int = 0  # the sequence number the next event will use
+    min_raise: int = 1  # the smallest raise increment (the last full raise, at least the big blind)
 
     def __post_init__(self) -> None:
         require_enum(self.street, Street, "street")
@@ -102,6 +107,9 @@ class TexasPublic(PublicExtension):
         require_nonnegative_int(self.current_bet, "current_bet")
         require_enum(self.ended, HandEnd, "ended")
         require_nonnegative_int(self.event_seq, "event_seq")
+        require_nonnegative_int(self.min_raise, "min_raise")
+        if self.min_raise < 1:
+            raise ValueError("min_raise must be at least 1")
         numbers = [seat.seat for seat in self.seats]
         if not MIN_PLAYERS <= len(numbers) <= MAX_PLAYERS:
             raise ValueError("a table needs 2 to 9 seats")
@@ -130,6 +138,8 @@ class TexasPublic(PublicExtension):
             raise ValueError("pot must equal the chips committed by all seats")
         if self.current_bet != max(seat.street_committed for seat in self.seats):
             raise ValueError("current_bet must equal the highest round commitment")
+        if any(seat.bet_seen > self.current_bet for seat in self.seats):
+            raise ValueError("a seat cannot have seen a bet higher than the current bet")
         live = sum(1 for seat in self.seats if not seat.folded)
         if (self.ended is HandEnd.SHOWDOWN) != (self.street is Street.SHOWDOWN):
             raise ValueError("showdown street and showdown ending go together")
