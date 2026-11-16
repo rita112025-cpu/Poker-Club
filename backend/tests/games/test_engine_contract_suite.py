@@ -408,6 +408,9 @@ class TableNote(PublicExtension):
         if type(self.text) is not str:
             raise TypeError("text must be a string")
 
+    def check_consistency(self, public: object) -> None:
+        pass
+
 
 @register_event_payload
 @_dataclass(frozen=True, slots=True)

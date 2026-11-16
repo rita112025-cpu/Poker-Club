@@ -99,6 +99,8 @@ def _start(
             posted[player.seat],
             stacks[player.seat] == 0,
             False,
+            posted[player.seat],
+            False,
         )
         for player in ordered
     )

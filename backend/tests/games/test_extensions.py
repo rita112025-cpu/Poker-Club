@@ -46,6 +46,10 @@ class TablePot(PublicExtension):
         if self.pot < 0:
             raise ValueError("pot cannot be negative")
 
+    def check_consistency(self, public: object) -> None:
+        if self.pot > 10**6:
+            raise ValueError("pot is implausibly large for this table")
+
 
 @register_event_payload
 @dataclass(frozen=True, slots=True)
@@ -107,6 +111,13 @@ def test_registration_rejects_unsafe_or_malformed_classes() -> None:
     class NoValidation(PublicExtension):
         pot: int = 0
 
+    @dataclass(frozen=True, slots=True)
+    class NoConsistency(PublicExtension):
+        pot: int = 0
+
+        def __post_init__(self) -> None:
+            pass
+
     class NotDataclass(PublicExtension):
         __slots__ = ()
 
@@ -117,6 +128,7 @@ def test_registration_rejects_unsafe_or_malformed_classes() -> None:
         (NoSlots, ValueError),
         (NotFrozen, ValueError),
         (NoValidation, ValueError),
+        (NoConsistency, ValueError),  # must implement check_consistency
         (TablePot, ValueError),  # duplicate
         (BetAmount, TypeError),  # a payload class is not a public extension
         ("TablePot", TypeError),
@@ -214,3 +226,39 @@ def test_event_payload_visibility_follows_the_event() -> None:
     )
     assert [e.seq for e in events_for_viewer(events, ALICE)] == [1, 2]
     assert [e.seq for e in events_for_viewer(events, BOB)] == [2]
+
+
+# ---- P3-02-0: the consistency hook ---------------------------------------------------
+
+
+def test_game_state_and_player_view_call_the_extension_consistency_check() -> None:
+    calls: list[PublicGameData] = []
+
+    @register_public_extension
+    @dataclass(frozen=True, slots=True)
+    class Watching(PublicExtension):
+        limit: int
+
+        def __post_init__(self) -> None:
+            if type(self.limit) is not int:
+                raise TypeError("limit must be an integer")
+
+        def check_consistency(self, public: object) -> None:
+            assert isinstance(public, PublicGameData)
+            calls.append(public)
+            if len(public.players) > self.limit:
+                raise ValueError("too many players for this extension")
+
+    state = game(Watching(5))
+    assert len(calls) == 1 and calls[0] is state.public
+    view = project_player_view(state, ALICE)
+    assert isinstance(view, PlayerView) and len(calls) == 2
+    with pytest.raises(ValueError, match="too many players"):
+        game(Watching(1))
+    with pytest.raises(ValueError, match="too many players"):
+        PlayerView(ALICE, state.public, PrivatePlayerData(ALICE), Watching(1))
+
+
+def test_base_extension_refuses_to_pass_consistency_without_an_override() -> None:
+    with pytest.raises(NotImplementedError):
+        PublicExtension().check_consistency(object())

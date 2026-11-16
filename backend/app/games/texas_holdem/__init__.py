@@ -1,5 +1,8 @@
-"""Texas hold'em: five-card hand evaluation (P2-E) and hand setup (P3-01). No engine yet."""
+"""Texas hold'em: hand evaluation (P2-E), hand setup (P3-01), fold/check/call engine (P3-02)."""
 
+from app.games.texas_holdem.betting import LegalActions, legal_actions
+from app.games.texas_holdem.engine import TexasEngine, TexasPayload
+from app.games.texas_holdem.events import ActionTaken, HandEnded, StreetDealt
 from app.games.texas_holdem.hand import start_hand
 from app.games.texas_holdem.hands import HandCategory, HandRank, compare, evaluate_five
 from app.games.texas_holdem.positions import (
@@ -10,9 +13,17 @@ from app.games.texas_holdem.positions import (
     positions,
 )
 from app.games.texas_holdem.rules import TexasRules
-from app.games.texas_holdem.state import SeatState, Street, TexasPublic
+from app.games.texas_holdem.state import HandEnd, SeatState, Street, TexasPublic
 
 __all__ = [
+    "ActionTaken",
+    "HandEnd",
+    "HandEnded",
+    "LegalActions",
+    "StreetDealt",
+    "TexasEngine",
+    "TexasPayload",
+    "legal_actions",
     "HandCategory",
     "HandRank",
     "Positions",

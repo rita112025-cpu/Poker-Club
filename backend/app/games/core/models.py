@@ -225,6 +225,8 @@ class GameState:
         identities = {player.id for player in self.public.players}
         if any(player.player_id not in identities for player in self.private.players):
             raise ValueError("private player must belong to the game")
+        if self.extension is not None:
+            self.extension.check_consistency(self.public)
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,3 +252,5 @@ class PlayerView:
             raise ValueError("private data must belong to the viewer")
         if self.viewer_id not in {player.id for player in self.public.players}:
             raise ValueError("viewer must belong to the game")
+        if self.extension is not None:
+            self.extension.check_consistency(self.public)

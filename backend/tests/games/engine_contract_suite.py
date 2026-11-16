@@ -45,6 +45,9 @@ class ContractScenario[PayloadT]:
     after_over: Callable[[GameState], tuple[GameAction, PayloadT]]
     # Cards the engine has legitimately made public (e.g. at showdown); excluded from leak checks.
     revealed: Callable[[GameState], frozenset[Card]] = lambda state: frozenset()
+    # False while an engine has no settlement yet: the finished game must then answer
+    # calculate_result with a (safe) GameError instead of a GameResult.
+    results_supported: bool = True
     max_steps: int = 200
 
 
@@ -266,12 +269,16 @@ def check_engine_contract[PayloadT](
     # Game over: result covers exactly the players, conserves points, is repeatable.
     assert engine.is_game_over(state), "script finished but the game is not over"
     result = engine.calculate_result(state)
-    assert isinstance(result, GameResult), "no result after game over"
-    assert engine.calculate_result(state) == result, "calculate_result is not repeatable"
-    assert {p.player_id for p in result.players} == {p.id for p in state.public.players}, (
-        "result must cover exactly the players"
-    )
-    assert sum(p.points_delta for p in result.players) == 0
+    if not scenario.results_supported:
+        _assert_safe(result, state, "unsupported result error", scenario.revealed(state))
+        assert engine.calculate_result(state) == result, "calculate_result is not repeatable"
+    else:
+        assert isinstance(result, GameResult), "no result after game over"
+        assert engine.calculate_result(state) == result, "calculate_result is not repeatable"
+        assert {p.player_id for p in result.players} == {p.id for p in state.public.players}, (
+            "result must cover exactly the players"
+        )
+        assert sum(p.points_delta for p in result.players) == 0
     # A well-formed action after the game is over must be rejected.
     late_action, late_payload = scenario.after_over(state)
     _check_rejection(

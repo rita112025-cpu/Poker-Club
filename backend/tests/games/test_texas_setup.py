@@ -28,11 +28,15 @@ from app.games.core import (
     require_production_deck,
 )
 from app.games.core.deck import DeckUnavailableError
-from app.games.core.extensions import registered_public_extensions
+from app.games.core.extensions import registered_event_payloads, registered_public_extensions
 from app.games.texas_holdem import (
+    ActionTaken,
+    HandEnd,
+    HandEnded,
     Positions,
     SeatState,
     Street,
+    StreetDealt,
     TexasPublic,
     TexasRules,
     initial_button,
@@ -175,6 +179,8 @@ def seat_state(**overrides: Any) -> SeatState:
         "committed": 10,
         "all_in": False,
         "folded": False,
+        "street_committed": 10,
+        "acted": False,
     }
     fields.update(overrides)
     return SeatState(**fields)
@@ -187,9 +193,9 @@ def texas_public(**overrides: Any) -> TexasPublic:
         "small_blind_seat": 1,
         "big_blind_seat": 2,
         "seats": (
-            seat_state(seat=0, player_id=pid(1), stack=100, committed=0),
-            seat_state(seat=1, player_id=pid(2), stack=95, committed=5),
-            seat_state(seat=2, player_id=pid(3), stack=90, committed=10),
+            seat_state(seat=0, player_id=pid(1), stack=100, committed=0, street_committed=0),
+            seat_state(seat=1, player_id=pid(2), stack=95, committed=5, street_committed=5),
+            seat_state(seat=2, player_id=pid(3), stack=90, committed=10, street_committed=10),
         ),
         "board": (),
         "pot": 15,
@@ -208,8 +214,14 @@ MATRICES[SeatState] = FieldMatrix(
         "committed": "nonneg_int",
         "all_in": "bool",
         "folded": "bool",
+        "street_committed": "nonneg_int",
+        "acted": "bool",
     },
-    {"all_in": [True]},  # all-in while chips remain
+    {
+        "all_in": [True],  # all-in while chips remain
+        "stack": [0],  # no chips left but not all-in
+        "street_committed": [11],  # more than the hand commitment
+    },
 )
 MATRICES[TexasPublic] = FieldMatrix(
     texas_public,
@@ -222,9 +234,13 @@ MATRICES[TexasPublic] = FieldMatrix(
         "board": "tuple",
         "pot": "nonneg_int",
         "current_bet": "nonneg_int",
+        "ended": "enum",
+        "event_seq": "nonneg_int",
     },
     {
-        "street": [SeatState],
+        "ended": [HandEnd.LAST_STANDING, HandEnd.SHOWDOWN, SeatState],
+        "current_bet": [9, 11],
+        "street": [SeatState, Street.FLOP, Street.SHOWDOWN],
         "seats": [(seat_state(),) * 2, (), (cast(Any, "seat"),) * 2],
         "board": [(Card.from_code("AS"), Card.from_code("AS")), (cast(Any, "AS"),)],
         "button_seat": [99],
@@ -234,15 +250,41 @@ MATRICES[TexasPublic] = FieldMatrix(
 )
 
 
-@pytest.mark.parametrize("cls", [SeatState, TexasPublic])
+MATRICES[ActionTaken] = FieldMatrix(
+    lambda **kw: ActionTaken(**{"seat": 1, "action": "call", "amount": 5, **kw}),
+    {"seat": "nonneg_int", "action": "text", "amount": "nonneg_int"},
+)
+MATRICES[StreetDealt] = FieldMatrix(
+    lambda **kw: StreetDealt(
+        **{
+            "street": Street.FLOP,
+            "cards": tuple(Card.from_code(c) for c in ("AS", "KS", "QS")),
+            **kw,
+        }
+    ),
+    {"street": "enum", "cards": "tuple"},
+    {
+        "street": [Street.TURN, Street.PRE_FLOP, Street.SHOWDOWN],
+        "cards": [(Card.from_code("AS"),) * 3, (cast(Any, "AS"),) * 3, ()],
+    },
+)
+MATRICES[HandEnded] = FieldMatrix(
+    lambda **kw: HandEnded(**{"reason": HandEnd.SHOWDOWN, **kw}),
+    {"reason": "enum"},
+    {"reason": [HandEnd.NONE, SeatState]},
+)
+
+
+@pytest.mark.parametrize("cls", [SeatState, TexasPublic, ActionTaken, StreetDealt, HandEnded])
 def test_texas_field_matrices_reject_every_attack(cls: type) -> None:
     check_field_matrix(cls, MATRICES[cls])
 
 
-def test_every_registered_extension_under_app_has_a_field_matrix() -> None:
-    app_extensions = {c for c in registered_public_extensions() if c.__module__.startswith("app.")}
-    assert TexasPublic in app_extensions
-    assert not [c.__name__ for c in app_extensions if c not in MATRICES], "add a field matrix"
+def test_every_registered_extension_and_payload_under_app_has_a_field_matrix() -> None:
+    registered = registered_public_extensions() | registered_event_payloads()
+    app_classes = {c for c in registered if c.__module__.startswith("app.")}
+    assert {TexasPublic, ActionTaken, StreetDealt, HandEnded} <= app_classes
+    assert not [c.__name__ for c in app_classes if c not in MATRICES], "add a field matrix"
 
 
 def test_extension_invariants_beyond_field_types() -> None:
@@ -260,8 +302,10 @@ def test_extension_invariants_beyond_field_types() -> None:
         texas_public(board=(Card.from_code("AS"),))
     texas_public(street=Street.FLOP, board=tuple(Card.from_code(c) for c in ("AS", "KS", "QS")))
     with pytest.raises(ValueError, match="heads-up"):
-        seats = (ok_seats[0], replace(ok_seats[1], committed=0))
-        texas_public(seats=seats, pot=0, button_seat=0, small_blind_seat=1, big_blind_seat=0)
+        seats = (ok_seats[0], replace(ok_seats[1], committed=0, street_committed=0))
+        texas_public(
+            seats=seats, pot=0, current_bet=0, button_seat=0, small_blind_seat=1, big_blind_seat=0
+        )
     with pytest.raises(ValueError):
         seat_state(all_in=True, stack=5)
     with pytest.raises(ValueError):
@@ -491,3 +535,14 @@ def test_repeated_seats_are_rejected_even_when_the_button_is_valid() -> None:
     ):
         with pytest.raises(ValueError, match="cannot repeat"):
             call()
+
+
+def test_a_table_with_one_live_seat_must_say_the_hand_has_ended() -> None:
+    seats = texas_public().seats
+    folded = (seats[0], replace(seats[1], folded=True), replace(seats[2], folded=True))
+    with pytest.raises(ValueError, match="has ended"):
+        texas_public(seats=folded)
+    ok = texas_public(seats=folded, ended=HandEnd.LAST_STANDING)
+    assert ok.ended is HandEnd.LAST_STANDING
+    with pytest.raises(ValueError, match="exactly one live seat"):
+        texas_public(ended=HandEnd.LAST_STANDING)

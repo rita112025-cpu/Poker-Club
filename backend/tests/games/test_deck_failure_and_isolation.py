@@ -99,6 +99,9 @@ def test_engine_gate_rejects_an_unavailable_deck(monkeypatch: pytest.MonkeyPatch
 
 def test_application_modules_never_use_the_fixed_order_factory() -> None:
     app_root = Path(__file__).resolve().parents[2] / "app"
+    # The engine's own testing entry point legitimately wraps the hand-setup testing path;
+    # any OTHER use, including calls to create_game_for_testing, is still an offender.
+    allowed = {("games/texas_holdem/engine.py", "start_hand_for_testing")}
     offenders: list[str] = []
     for path in app_root.rglob("*.py"):
         if path.name == "deck.py" and path.parent.name == "core":
@@ -112,6 +115,8 @@ def test_application_modules_never_use_the_fixed_order_factory() -> None:
                 names.append(node.id)
             elif isinstance(node, ast.ImportFrom):
                 names.extend(alias.name for alias in node.names)
+            relative = path.relative_to(app_root).as_posix()
+            names = [name for name in names if (relative, name) not in allowed]
             if any(name == "for_testing" or name.endswith("_for_testing") for name in names):
                 offenders.append(f"{path.relative_to(app_root)}:{getattr(node, 'lineno', 0)}")
     assert offenders == []

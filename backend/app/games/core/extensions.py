@@ -13,9 +13,17 @@ from dataclasses import is_dataclass
 
 
 class PublicExtension:
-    """Marker base for public, per-game table data (board, pot, bets, ...). Never private."""
+    """Marker base for public, per-game table data (board, pot, bets, ...). Never private.
+
+    Subclasses must override check_consistency: GameState and PlayerView call it with their
+    PublicGameData so the extension can verify it agrees with the core public data
+    (same players, chips that add up, a turn that can act, ...). It raises on a mismatch.
+    """
 
     __slots__ = ()
+
+    def check_consistency(self, public: object) -> None:
+        raise NotImplementedError("extensions must implement check_consistency")
 
 
 class EventPayload:
@@ -28,7 +36,9 @@ _PUBLIC_EXTENSIONS: set[type] = set()
 _EVENT_PAYLOADS: set[type] = set()
 
 
-def _register[T: type](base: type, registry: set[type], cls: T) -> T:
+def _register[T: type](
+    base: type, registry: set[type], cls: T, required: tuple[str, ...] = ("__post_init__",)
+) -> T:
     if not isinstance(cls, type) or cls is base or not issubclass(cls, base):
         raise TypeError(f"class must be a strict subclass of {base.__name__}")
     if not is_dataclass(cls):
@@ -38,8 +48,9 @@ def _register[T: type](base: type, registry: set[type], cls: T) -> T:
         raise ValueError("class must be a frozen dataclass")
     if "__slots__" not in cls.__dict__:
         raise ValueError("class must use slots=True")
-    if "__post_init__" not in cls.__dict__:
-        raise ValueError("class must define its own __post_init__ validation")
+    for name in required:
+        if name not in cls.__dict__:
+            raise ValueError(f"class must define its own {name}")
     if cls in registry:
         raise ValueError("class is already registered")
     registry.add(cls)
@@ -48,7 +59,9 @@ def _register[T: type](base: type, registry: set[type], cls: T) -> T:
 
 def register_public_extension[T: type](cls: T) -> T:
     """Class decorator; apply above @dataclass(frozen=True, slots=True)."""
-    return _register(PublicExtension, _PUBLIC_EXTENSIONS, cls)
+    return _register(
+        PublicExtension, _PUBLIC_EXTENSIONS, cls, ("__post_init__", "check_consistency")
+    )
 
 
 def register_event_payload[T: type](cls: T) -> T:

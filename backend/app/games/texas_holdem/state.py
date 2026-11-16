@@ -1,9 +1,10 @@
-"""Texas public table data (P3-01), registered as a core public extension.
+"""Texas public table data (P3-01, extended in P3-02), registered as a core public extension.
 
 Everything here is public to every player. Hole cards and the undealt deck stay in
 PrivateGameData. Player.points keeps the hand's starting stack (the game_players
-initial_points snapshot); live chips are in SeatState.stack. Every field is validated with
-exact types; the field matrix test enforces that for each registered extension.
+initial_points snapshot); live chips are in SeatState.stack, so for every seat
+stack + committed == Player.points until settlement (checked in check_consistency).
+Every field is validated with exact types; the field matrix test enforces that.
 """
 
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from uuid import UUID
 
 from app.games.core.card import Card
 from app.games.core.extensions import PublicExtension, register_public_extension
+from app.games.core.models import GameStatus, PublicGameData
 from app.games.core.validation import (
     require_bool,
     require_enum,
@@ -32,6 +34,21 @@ class Street(Enum):
     SHOWDOWN = "showdown"
 
 
+class HandEnd(Enum):
+    NONE = "none"
+    LAST_STANDING = "last_standing"  # everyone else folded; no showdown
+    SHOWDOWN = "showdown"  # betting is over; pots are settled elsewhere (P3-04)
+
+
+BOARD_SIZE = {
+    Street.PRE_FLOP: 0,
+    Street.FLOP: 3,
+    Street.TURN: 4,
+    Street.RIVER: 5,
+    Street.SHOWDOWN: 5,
+}
+
+
 @dataclass(frozen=True, slots=True)
 class SeatState:
     seat: int
@@ -40,6 +57,8 @@ class SeatState:
     committed: int  # chips put into the pot during this hand
     all_in: bool
     folded: bool
+    street_committed: int = 0  # chips put in during the current betting round
+    acted: bool = False  # has acted in this round (blinds alone do not count)
 
     def __post_init__(self) -> None:
         require_nonnegative_int(self.seat, "seat")
@@ -48,10 +67,14 @@ class SeatState:
         require_nonnegative_int(self.committed, "committed")
         require_bool(self.all_in, "all_in")
         require_bool(self.folded, "folded")
-        if self.all_in and self.stack != 0:
-            raise ValueError("an all-in seat has no chips left")
+        require_nonnegative_int(self.street_committed, "street_committed")
+        require_bool(self.acted, "acted")
+        if self.all_in != (self.stack == 0):
+            raise ValueError("a seat is all-in exactly when it has no chips left")
         if self.all_in and self.folded:
             raise ValueError("a seat cannot be both all-in and folded")
+        if self.street_committed > self.committed:
+            raise ValueError("a round commitment cannot exceed the hand commitment")
 
 
 @register_public_extension
@@ -64,7 +87,9 @@ class TexasPublic(PublicExtension):
     seats: tuple[SeatState, ...]
     board: tuple[Card, ...]
     pot: int
-    current_bet: int
+    current_bet: int  # the highest street_committed this round
+    ended: HandEnd = HandEnd.NONE
+    event_seq: int = 0  # the sequence number the next event will use
 
     def __post_init__(self) -> None:
         require_enum(self.street, Street, "street")
@@ -75,6 +100,8 @@ class TexasPublic(PublicExtension):
         require_exact_tuple(self.board, Card, "board")
         require_nonnegative_int(self.pot, "pot")
         require_nonnegative_int(self.current_bet, "current_bet")
+        require_enum(self.ended, HandEnd, "ended")
+        require_nonnegative_int(self.event_seq, "event_seq")
         numbers = [seat.seat for seat in self.seats]
         if not MIN_PLAYERS <= len(numbers) <= MAX_PLAYERS:
             raise ValueError("a table needs 2 to 9 seats")
@@ -93,9 +120,39 @@ class TexasPublic(PublicExtension):
             raise ValueError("small and big blind cannot share a seat")
         if len(numbers) == 2 and self.small_blind_seat != self.button_seat:
             raise ValueError("heads-up, the button is the small blind")
-        if len(self.board) > MAX_BOARD_CARDS or len(set(self.board)) != len(self.board):
-            raise ValueError("board must have at most 5 distinct cards")
         if self.street is Street.PRE_FLOP and self.board:
             raise ValueError("there is no board before the flop")
+        if len(set(self.board)) != len(self.board):
+            raise ValueError("board cards must be distinct")
+        if len(self.board) != BOARD_SIZE[self.street]:
+            raise ValueError("board size does not match the street")
         if self.pot != sum(seat.committed for seat in self.seats):
             raise ValueError("pot must equal the chips committed by all seats")
+        if self.current_bet != max(seat.street_committed for seat in self.seats):
+            raise ValueError("current_bet must equal the highest round commitment")
+        live = sum(1 for seat in self.seats if not seat.folded)
+        if (self.ended is HandEnd.SHOWDOWN) != (self.street is Street.SHOWDOWN):
+            raise ValueError("showdown street and showdown ending go together")
+        if self.ended is HandEnd.LAST_STANDING and live != 1:
+            raise ValueError("a last-standing ending needs exactly one live seat")
+        if self.ended is not HandEnd.LAST_STANDING and live < 2:
+            raise ValueError("a hand with one live seat has ended")
+
+    def check_consistency(self, public: object) -> None:
+        if type(public) is not PublicGameData:
+            raise TypeError("public must be an exact PublicGameData instance")
+        players = public.players
+        if [(s.seat, s.player_id) for s in self.seats] != [(p.seat, p.id) for p in players]:
+            raise ValueError("extension seats must match the players")
+        for seat, player in zip(self.seats, players, strict=True):
+            if seat.stack + seat.committed != player.points:
+                raise ValueError("chips must add up to the player's starting points")
+        finished = public.status is GameStatus.FINISHED
+        if finished != (self.ended is not HandEnd.NONE):
+            raise ValueError("the hand has ended exactly when the game is finished")
+        if public.turn is not None:
+            if finished:
+                raise ValueError("there is no turn after the hand ends")
+            holder = next((s for s in self.seats if s.player_id == public.turn.player_id), None)
+            if holder is None or holder.folded or holder.all_in:
+                raise ValueError("the turn must belong to a seat that can act")
