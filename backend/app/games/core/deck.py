@@ -115,4 +115,7 @@ class Deck:
         self._failed = False
 
     def __repr__(self) -> str:
-        return f"Deck(remaining_count={self.remaining_count}, is_test_only={self.is_test_only})"
+        state = "" if self.is_available else "unavailable=True, "
+        return (
+            f"Deck({state}remaining_count={self.remaining_count}, is_test_only={self.is_test_only})"
+        )

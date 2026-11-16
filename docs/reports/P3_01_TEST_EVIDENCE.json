@@ -1,0 +1,412 @@
+{
+  "scope": "P3-01-0 prerequisites (shared validators, field-matrix enforcement, leak detection) and P3-01 Texas hand setup; no-database tests only; pending independent human review",
+  "started_at": "2026-11-15T21:48:02.867339+08:00",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "environment_overrides": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"
+  },
+  "git_head": null,
+  "git_head_note": "No commits exist; HEAD cannot be resolved",
+  "r1_evidence_sha256": "a3569aa7e7fee90199d1b9e1304813a6a9ce25cd50958a444e6e350fbb94e5ca",
+  "r2_evidence_sha256": "2b2f9043fa642c7a47c6b3c427878a210407bdf4f6c1141c5d3ff000d8288367",
+  "p2c_evidence_sha256": "4b81220a14cc30f6d91ddbe59d1d52a503cb15e39690908129aae49305f7bf6c",
+  "p2d_evidence_sha256": "81b53d5772cc1b25d499af5477833481362109d0e8d619ae228508ff2b93ade3",
+  "p2e_evidence_sha256": "201552634ecd86af20d5a108f5ec97f829290932f7b175f5e2fbc48a84574dde",
+  "p2f_evidence_sha256": "173d93c74659ab1efcdc5df43fac7a724c64026980597baaf16b83e834ec02f1",
+  "p3_00_evidence_sha256": "7a4fabf029b0a2fe3a3d96e6b8f27780f82f8a3a17cd56a4a48cc287a0953993",
+  "original_p2b_evidence_sha256": "07d214ddf1f6a6a4f034ead576370aa9c51e1d5b44656162f3340191a9528fd8",
+  "decision": "Hand-written position table; start_hand with production deck gate and trusted testing path; TexasPublic registered extension with enforced field matrix; no actions, streets, pots or engine",
+  "source_sha256": {
+    "backend/app/games/core/__init__.py": "b4c71d4df7894e3add74bb9b7b0c53c63f7816de6ac7af5e632a1a8b7852508b",
+    "backend/app/games/core/card.py": "1c23d6e028638833a7d06fff4a152b621ab72e68733904aa586a535bbbb8b67b",
+    "backend/app/games/core/deck.py": "be63873706c37d1d5112bf2225ed50420ff02b28936feb48f36983a194cf5852",
+    "backend/app/games/core/models.py": "2faf6a7a2db93fd024a650ae2423bd4f6b67f2aeee75b26008752391d25cd94c",
+    "backend/migrations/versions/0001_game_types.py": "b8e742362dc6a8852c9b6231483817876900a1e46cceb8c3e67bc327a599d2fb",
+    "backend/pyproject.toml": "d0b784adb215d520a99dd27e077d44d5ab3272cadeaa3cb3322f9b1885fd5c1e",
+    "backend/tests/games/test_card.py": "df64e3602898e8c65f76f1032897b7503a34309e1a1a8ed5c5f49cc5f8858f88",
+    "backend/tests/games/test_deck.py": "81424d166f87a6a0132055d3959ba0c7c71f70757d417ffd32203d799e531fd4",
+    "backend/tests/games/test_models.py": "ff1cbaeb1da5a927c36d50432a70c0a9188aafbfac9786d155382952b7c8f8e4",
+    "backend/tests/games/test_public_isolation.py": "1687c2c7a4401eb34b787d470f6e0eb05c357180db287051302db66918ead0a9",
+    "backend/tests/games/test_public_field_matrix.py": "102e2ebfd88970cc9f55ade3cbc26988e6a8577ac0a9a5fcb0ce8f958fa9dd70",
+    "backend/app/games/core/engine.py": "d46c0ba56561427b493604b3d022958c7cbdbecca7561316634bae19302467c7",
+    "backend/app/games/core/engine_types.py": "a0dcb751b97d83331a4f992c5ddb9eabd8e0436789adfa850d7059787c187c02",
+    "backend/tests/games/test_engine_contract.py": "296d7099319a049e6da7c3e71d2dd66258a8d72423979d584122c1ba47e3d4e2",
+    "backend/app/games/core/registry.py": "0ec96c474810f5a3f73cc22ef0c97fb6e0d94218ce6cf85778988fb56a539d6d",
+    "backend/tests/games/test_registry.py": "0ed88d81e9567f55a994f5de139e1d69bf2cc607fba1b5665ecdfd037eb331cb",
+    "backend/app/games/texas_holdem/hands.py": "d62ad4d0d81005ba1f6d5c202ca718a7011c35e4b8fab24fd971fcec6c18298e",
+    "backend/app/games/texas_holdem/__init__.py": "5aa98c781b6626ef0ba5c23d3ceef37206a781fbe081ead268f3f0e3f25e0d0d",
+    "backend/tests/games/test_texas_hands.py": "85ec5441d52d72f9cf59cac2f047a4dcbb9bbbd100b490eb5378ee02fc7ed779",
+    "backend/app/games/core/projection.py": "9e2b25b1d71dac13af4e28b477a46d7cfc3735704cb089704dec35beef4df452",
+    "backend/tests/games/engine_contract_suite.py": "cb1a0a819752840373ff2feddd56ce05ebd9dcfee192e1749b982ad425093110",
+    "backend/tests/games/test_engine_contract_suite.py": "7ab47cc9da496b20ea758f5694d345fd9da1c238842683735f70299b99430d4f",
+    "backend/tests/games/test_projection.py": "463e34704253ea18313856bf99490b09b60f622f0923df036083bbbb22dbdbce",
+    "backend/app/games/core/extensions.py": "e9bd353d6d0e8b68446a03c1845037f82d804e124e749b9015772d4e8518902d",
+    "backend/tests/games/test_extensions.py": "e124cdbc09705fbdec8bed903a2d7750bbf7a77b7cd6073dd8f05b16ba587479",
+    "backend/app/games/core/validation.py": "47faf17e0c39fd15942d7ddadf82b71728053ea2b46a3be0cb90c1c3d23cfe2d",
+    "backend/app/games/texas_holdem/rules.py": "de22aa9454c78d0003782ecc8d004556bc7486f3393730b045371bce4854ecec",
+    "backend/app/games/texas_holdem/positions.py": "40588854608daf47328105269ff3a92a5ccfd38cd22b718706946f90b36a573f",
+    "backend/app/games/texas_holdem/state.py": "f7d41b87fcc54cba769f35fdc24c06307ba570d30f6071ecfe1eb06258856264",
+    "backend/app/games/texas_holdem/hand.py": "60642679f88bcb8b7af6dff38f1bd2fdbb20a32b0a33aab7c7606c2ac351c476",
+    "backend/tests/games/extension_matrix.py": "cbdd3d7790ccd9363660ec8a129ebd4f8556c65d2a0e9bd72399cba340fcb5ec",
+    "backend/tests/games/test_texas_setup.py": "0a685b9e5f5e128d9751afd8887d832c309968b1acf9894160f6c90587463b02",
+    "backend/tests/games/test_deck_failure_and_isolation.py": "1f1fa598c83fb59ec5cfe2b7bba931b17c7b8ad6fbba24dadfc0c43364bf2b88",
+    "backend/tests/test_health.py": "a76d71f603d52b9664b927990c98b2146a206668b672383cc1a73c1c6809f4cc"
+  },
+  "checks": [
+    {
+      "label": "P3-01 texas setup",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_texas_setup.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:02.867339+08:00",
+      "finished_at": "2026-11-15T21:48:04.595425+08:00",
+      "elapsed_seconds": 1.728,
+      "exit_code": 0,
+      "stdout": "......................................................                   [100%]\n54 passed in 0.40s\n",
+      "stderr": "",
+      "passed": 54
+    },
+    {
+      "label": "P3-00 extensions",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_extensions.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:04.595425+08:00",
+      "finished_at": "2026-11-15T21:48:06.012545+08:00",
+      "elapsed_seconds": 1.418,
+      "exit_code": 0,
+      "stdout": "...................                                                      [100%]\n19 passed in 0.11s\n",
+      "stderr": "",
+      "passed": 19
+    },
+    {
+      "label": "P3-00 deck failure and isolation",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_deck_failure_and_isolation.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:06.012930+08:00",
+      "finished_at": "2026-11-15T21:48:07.467016+08:00",
+      "elapsed_seconds": 1.454,
+      "exit_code": 0,
+      "stdout": ".......                                                                  [100%]\n7 passed in 0.15s\n",
+      "stderr": "",
+      "passed": 7
+    },
+    {
+      "label": "P2-F projection",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_projection.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:07.467016+08:00",
+      "finished_at": "2026-11-15T21:48:08.906708+08:00",
+      "elapsed_seconds": 1.44,
+      "exit_code": 0,
+      "stdout": "...............                                                          [100%]\n15 passed in 0.13s\n",
+      "stderr": "",
+      "passed": 15
+    },
+    {
+      "label": "P2-F contract suite",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_engine_contract_suite.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:08.906708+08:00",
+      "finished_at": "2026-11-15T21:48:11.053012+08:00",
+      "elapsed_seconds": 2.146,
+      "exit_code": 0,
+      "stdout": "...............................                                          [100%]\n31 passed in 0.83s\n",
+      "stderr": "",
+      "passed": 31
+    },
+    {
+      "label": "P2-E texas hands",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_texas_hands.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:11.053012+08:00",
+      "finished_at": "2026-11-15T21:48:15.640854+08:00",
+      "elapsed_seconds": 4.588,
+      "exit_code": 0,
+      "stdout": ".......................................................                  [100%]\n55 passed in 3.24s\n",
+      "stderr": "",
+      "passed": 55
+    },
+    {
+      "label": "P2-D registry",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_registry.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:15.640854+08:00",
+      "finished_at": "2026-11-15T21:48:17.100404+08:00",
+      "elapsed_seconds": 1.454,
+      "exit_code": 0,
+      "stdout": "..................................                                       [100%]\n34 passed in 0.15s\n",
+      "stderr": "",
+      "passed": 34
+    },
+    {
+      "label": "P2-C engine contract",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_engine_contract.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:17.100404+08:00",
+      "finished_at": "2026-11-15T21:48:18.573590+08:00",
+      "elapsed_seconds": 1.473,
+      "exit_code": 0,
+      "stdout": "............................                                             [100%]\n28 passed in 0.16s\n",
+      "stderr": "",
+      "passed": 28
+    },
+    {
+      "label": "R2 public field matrix",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_public_field_matrix.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:18.573590+08:00",
+      "finished_at": "2026-11-15T21:48:20.008449+08:00",
+      "elapsed_seconds": 1.435,
+      "exit_code": 0,
+      "stdout": ".........................                                                [100%]\n25 passed in 0.11s\n",
+      "stderr": "",
+      "passed": 25
+    },
+    {
+      "label": "R1 public isolation",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_public_isolation.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:20.009539+08:00",
+      "finished_at": "2026-11-15T21:48:21.422956+08:00",
+      "elapsed_seconds": 1.413,
+      "exit_code": 0,
+      "stdout": "...................                                                      [100%]\n19 passed in 0.12s\n",
+      "stderr": "",
+      "passed": 19
+    },
+    {
+      "label": "Original P2-B regression",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_models.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:21.422956+08:00",
+      "finished_at": "2026-11-15T21:48:25.013051+08:00",
+      "elapsed_seconds": 3.59,
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 58%]\n....................................................                     [100%]\n124 passed in 2.27s\n",
+      "stderr": "",
+      "passed": 124
+    },
+    {
+      "label": "P2-A regression",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/games/test_card.py",
+        "backend/tests/games/test_deck.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:25.013051+08:00",
+      "finished_at": "2026-11-15T21:48:26.547048+08:00",
+      "elapsed_seconds": 1.534,
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 56%]\n.......................................................                  [100%]\n127 passed in 0.21s\n",
+      "stderr": "",
+      "passed": 127
+    },
+    {
+      "label": "Phase 1 no-database health",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests/test_health.py",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:26.547048+08:00",
+      "finished_at": "2026-11-15T21:48:28.890125+08:00",
+      "elapsed_seconds": 2.343,
+      "exit_code": 0,
+      "stdout": "...                                                                      [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\github\\Poker-Club\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 0.93s\n",
+      "stderr": "",
+      "passed": 3
+    },
+    {
+      "label": "Mypy",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "mypy",
+        "backend/app",
+        "backend/tests/games"
+      ],
+      "started_at": "2026-11-15T21:48:28.890125+08:00",
+      "finished_at": "2026-11-15T21:48:29.743570+08:00",
+      "elapsed_seconds": 0.853,
+      "exit_code": 0,
+      "stdout": "Success: no issues found in 41 source files\n",
+      "stderr": "",
+      "passed": null
+    },
+    {
+      "label": "Ruff check",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "ruff",
+        "check",
+        "backend"
+      ],
+      "started_at": "2026-11-15T21:48:29.743570+08:00",
+      "finished_at": "2026-11-15T21:48:30.052834+08:00",
+      "elapsed_seconds": 0.309,
+      "exit_code": 0,
+      "stdout": "All checks passed!\n",
+      "stderr": "",
+      "passed": null
+    },
+    {
+      "label": "Ruff format check",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "backend"
+      ],
+      "started_at": "2026-11-15T21:48:30.052834+08:00",
+      "finished_at": "2026-11-15T21:48:30.359490+08:00",
+      "elapsed_seconds": 0.307,
+      "exit_code": 0,
+      "stdout": "48 files already formatted\n",
+      "stderr": "",
+      "passed": null
+    },
+    {
+      "label": "Full backend suite",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pytest",
+        "backend/tests",
+        "-q",
+        "-p",
+        "no:cacheprovider"
+      ],
+      "started_at": "2026-11-15T21:48:30.359490+08:00",
+      "finished_at": "2026-11-15T21:48:40.378541+08:00",
+      "elapsed_seconds": 10.019,
+      "exit_code": 0,
+      "stdout": "........................................................................ [ 13%]\n........................................................................ [ 26%]\n........................................................................ [ 39%]\n........................................................................ [ 52%]\n........................................................................ [ 65%]\n........................................................................ [ 78%]\n........................................................................ [ 92%]\n......................................sssss                              [100%]\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\fastapi\\testclient.py:1\n  D:\\github\\Poker-Club\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n542 passed, 5 skipped, 1 warning in 8.47s\n",
+      "stderr": "",
+      "passed": 542
+    },
+    {
+      "label": "pip check",
+      "command": [
+        "D:\\github\\Poker-Club\\.venv\\Scripts\\python.exe",
+        "-B",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "started_at": "2026-11-15T21:48:40.378541+08:00",
+      "finished_at": "2026-11-15T21:48:41.629384+08:00",
+      "elapsed_seconds": 1.251,
+      "exit_code": 0,
+      "stdout": "No broken requirements found.\n",
+      "stderr": "",
+      "passed": null
+    }
+  ]
+}

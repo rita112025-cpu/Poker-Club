@@ -55,6 +55,14 @@ def register_event_payload[T: type](cls: T) -> T:
     return _register(EventPayload, _EVENT_PAYLOADS, cls)
 
 
+def registered_public_extensions() -> frozenset[type]:
+    return frozenset(_PUBLIC_EXTENSIONS)
+
+
+def registered_event_payloads() -> frozenset[type]:
+    return frozenset(_EVENT_PAYLOADS)
+
+
 def check_public_extension(value: object, name: str) -> None:
     if value is not None and type(value) not in _PUBLIC_EXTENSIONS:
         raise TypeError(f"{name} must be None or an exact registered public extension")

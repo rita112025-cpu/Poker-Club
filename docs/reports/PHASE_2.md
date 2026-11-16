@@ -1,5 +1,119 @@
 # Phase 2 進度報告
 
+## P3-01 正式結案決議 — CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P3-01 = **CONDITIONAL PASS**，核准 **P3-01 建局階段**（含 P3-01-0 前置）結案。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 P3-02，未做任何 Git 寫入。
+注意：P3-01 的實作與文件尚未提交。
+
+### 驗收範圍與獨立複驗結果
+
+- 範圍：`texas_holdem/` 的 `rules.py`、`positions.py`、`state.py`、`hand.py`，`core/validation.py`，契約套件的洩漏偵測擴充與擴充欄位矩陣強制。
+- 獨立複驗：`models.py`、`engine*.py`、`projection.py`、`registry.py`、Card、`hands.py`、migration、P3-00 證據相對 HEAD 無差異；
+  P3-01 證據 34 個來源雜湊、七份舊證據雜湊與 18 項檢查退出碼皆吻合。
+- Backend：**542 passed、5 skipped**（連跑 6 次穩定）；5 項 PostgreSQL 測試**尚未驗證通過**。Mypy、Ruff、格式檢查通過。
+- 獨立 oracle：自寫的位置參考實作對 12 個座位號中所有 2 到 9 人座位組合與每個按鈕共 23,760 種，0 項不一致；
+  4000 次隨機 `start_hand`（含短籌碼邊界）逐項比對籌碼、盲注、全下旗標、底池、底牌與發牌順序、剩餘牌、先行者與積分守恆，0 項不一致。
+- 對抗輸入：`Player`／`Deck` 子類別、布林按鈕、同一玩家佔兩座位、牌數不足牌組皆被拒絕。
+- 作者的 28 種變異結果**未經獨立重跑**，只核對了數量與文件一致。
+- 歷史紀錄與各階段證據皆保留，未覆寫。
+
+### 保留條件
+
+1. **狀態不變式缺口（P3-02 動手前須處理）**：以下實測被接受——`GameState` 接受座位名單與 `public.players` 不一致的 `TexasPublic`；
+   擴充資料的籌碼可與 `Player.points` 完全不符；`current_bet` 可大於任何投入額；籌碼為 0 但未標 all-in 的 `SeatState`。
+   目前只有 `start_hand` 產生有效狀態；P3-02 的動作會改寫這些欄位，須先在建構時強制一致性。
+2. **措辭偵測為啟發式**：`2 c`、`2-c`、`10 h`、`K D`、`ace ♠`、零寬字元、`rank=2 suit=C` 偵測不到；全大寫訊息中的 `AS` 會誤判。通過偵測不代表沒有洩漏。
+3. **正式規則值與決策仍待人工確認**：盲注金額、籌碼為測試 fixture（小盲 5、大盲 10、籌碼 100），燒牌暫定 False，發牌順序與初始按鈕規則；
+   標準德州預設（短額 all-in 不重新開放加注、加注為「加到」）仍待確認。
+4. 擴充註冊不檢查 `__post_init__` 內容品質（由欄位矩陣測試把關）；擴充白名單為全域；契約套件仍只在 stub 上完整驗證，`start_hand` 尚非引擎。
+5. 單手牌範圍；死按鈕、出局玩家與跨手輪替僅有純函式 `next_button`，無狀態化；建局不產生事件（初始狀態為事件序號 0 的基準快照）。
+6. 沿用前幾階段的信任限制。
+
+### P2-A 持續開放事項（仍未完成）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險：P3-00 已修補並通過複驗，是否正式標為已解決由人工決定。
+- [ ] test-only Deck 與正式引擎的隔離：僅緩解，仍開放。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制：仍開放。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口：仍開放。
+
+### 尚未驗收（P3-01 通過不代表已完成）
+
+- 玩家動作、各街推進、下注規則、七選五、邊池、結算（P3-02～P3-04）；完整引擎、Registry 登記與牌局測試（P3-05）。
+- Room、GameSession、認證與授權、傳輸層、資料庫整合；PostgreSQL 測試（5 項 skipped）。
+
+---
+
+## P3-01 德州建局、盲注與按鈕（含 P3-01-0 前置） — 已人工驗收（見上方結案決議）
+
+日期：2026-11-15（Asia/Taipei）。依 P3-01 規劃 8 項決策（照建議）實作。
+**未開始 P3-02**：沒有任何玩家動作、各街推進、下注、邊池、結算、`GameEngine` 實作或 Registry 登記；未 commit。
+本輪**有意修改**已結案的 `deck.py`、`extensions.py`、契約套件與其測試（範圍見下）。
+
+### 採用的決策與待確認項目
+
+1. 規則值由呼叫端提供，產品程式**不含預設盲注或籌碼**；測試使用標為 fixture 的暫定值（小盲 5、大盲 10、籌碼 100），**不是產品設定，待人工提供正式值**。
+2. 是否燒牌：`TexasRules.burn_cards` 為必填欄位，P3-01 不使用（燒牌發生在翻牌前，P3-02 才生效）；暫定值 False，**待人工確認**。
+3. 初始按鈕為最小座位號，之後以 `next_button` 依座位號遞增輪替（座位可有空號）。
+4. 座位號遞增即順時針。
+5. 發牌順序（隨規則版本記錄）：從小盲座位開始順時針每人一張、共兩輪；單挑時小盲即按鈕。
+6. `Player.points` 視為本局開始時的桌上籌碼；零籌碼玩家回傳 `zero_stack`；活動籌碼放在 `SeatState.stack`。
+7. 籌碼不足盲注時，投入全部並標為 all-in；第一位行動者為名義座位或其後第一個仍可行動的座位，無人可行動時 `turn` 為 None。
+8. 建局不產生事件；初始狀態視為事件序號 0 的基準快照（未改 `create_game` 契約）。
+
+### P3-01-0：P3-00 保留條件處理結果（待複驗）
+
+- **條件 1（擴充資料洩漏）**：契約套件現在對視圖的擴充資料、公開事件 payload 做隱藏牌比對；新增 `revealed` 場景欄位，讓引擎在攤牌等時點合法公開的牌可被豁免。
+- **條件 2（措辭變體）**：新增 `reveals_card`，偵測牌面碼（任意大小寫）、`repr`、牌名（如 two of clubs）、點數加花色符號；單獨的點數或花色不算。
+  已知盲點：小寫 `as`／`ad`／`ah`／`ac` 是一般英文單字，不視為牌面碼（僅大寫形式被偵測），否則會因隨機發牌造成不穩定的誤判。
+- **條件 3（擴充欄位驗證）**：新增 `core/validation.py` 公開的共用精確型別驗證函式；擴充機制新增 `registered_public_extensions()`／`registered_event_payloads()`；
+  測試輔助 `extension_matrix.py` 要求每個 `app/` 下註冊的擴充類別都有欄位矩陣，缺少時測試失敗（`TexasPublic`、`SeatState` 已有）。
+  註冊本身仍不檢查 `__post_init__` 的內容品質，品質由欄位矩陣測試把關。
+- **條件 5 的一部分**：失敗的 Deck 的 `repr` 現在標示 `unavailable=True`。
+
+### 新增內容
+
+- `core/validation.py`、`texas_holdem/rules.py`（`TexasRules`）、`positions.py`（座位、按鈕、盲注位置純函式）、`state.py`（`Street`、`SeatState`、註冊的 `TexasPublic`）、
+  `hand.py`（`start_hand`：經 `require_production_deck`；`start_hand_for_testing`：僅供受信任測試，不匯出，靜態守衛確保應用程式碼不使用）。
+- 測試：`test_texas_setup.py` 54 項（手寫位置表 16 列、2 到 9 人逐一建局、發牌順序、短籌碼、拒絕案例、欄位矩陣、投影不洩漏、模組無框架匯入），
+  契約套件 +8（6 種新洩漏引擎、無害擴充與豁免、措辭偵測）。
+- 副本上 28 種變異（位置、盲注、發牌、閘門、狀態不變式、規則、共用驗證）全被抓到；其中「重複座位」最初存活，已補測試後被抓到。
+
+### 實際結果
+
+環境：3.12.10，Windows-11-10.0.26300-SP0，PYTHONDONTWRITEBYTECODE=1、PYTEST_DISABLE_PLUGIN_AUTOLOAD=1。
+- P3-01 texas setup：exit 0；54 passed in 0.40s
+- P3-00 extensions：exit 0；19 passed in 0.11s
+- P3-00 deck failure and isolation：exit 0；7 passed in 0.15s
+- P2-F projection：exit 0；15 passed in 0.13s
+- P2-F contract suite：exit 0；31 passed in 0.83s
+- P2-E texas hands：exit 0；55 passed in 3.24s
+- P2-D registry：exit 0；34 passed in 0.15s
+- P2-C engine contract：exit 0；28 passed in 0.16s
+- R2 public field matrix：exit 0；25 passed in 0.11s
+- R1 public isolation：exit 0；19 passed in 0.12s
+- Original P2-B regression：exit 0；124 passed in 2.27s
+- P2-A regression：exit 0；127 passed in 0.21s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.93s
+- Mypy：exit 0；Success: no issues found in 41 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；48 files already formatted
+- Full backend suite：exit 0；542 passed, 5 skipped, 1 warning in 8.47s
+- pip check：exit 0；No broken requirements found.
+
+完整 backend **542 passed、5 skipped**（480＋62；5 項 PostgreSQL 測試仍未驗證通過）。證據檔 `P3_01_TEST_EVIDENCE.json`；
+`hand.py` SHA-256 `60642679f88bcb8b7af6dff38f1bd2fdbb20a32b0a33aab7c7606c2ac351c476`；`positions.py` `40588854608daf47328105269ff3a92a5ccfd38cd22b718706946f90b36a573f`；`state.py` `f7d41b87fcc54cba769f35fdc24c06307ba570d30f6071ecfe1eb06258856264`；`validation.py` `47faf17e0c39fd15942d7ddadf82b71728053ea2b46a3be0cb90c1c3d23cfe2d`；
+`test_texas_setup.py` `0a685b9e5f5e128d9751afd8887d832c309968b1acf9894160f6c90587463b02`。B／R1／R2／C／D／E／F／P3-00 證據未覆寫。
+
+### 尚未解決的限制
+
+- 盲注金額、籌碼、燒牌的正式值與標準德州預設（短額 all-in 不重新開放加注、加注為「加到」）仍待人工確認；發牌順序與初始按鈕規則一旦確認即寫入規則版本。
+- 擴充白名單仍為全域；註冊不檢查 `__post_init__` 內容；契約套件仍只在 stub 上完整驗證（`start_hand` 尚非引擎）。
+- 單手牌範圍；死按鈕、出局玩家與跨手輪替僅有純函式 `next_button`，無狀態化。
+- P2-A 風險 2、3、4 與 PostgreSQL 5 項測試仍開放；Room、GameSession、認證、傳輸與資料庫整合未實作。P3-01 是否結案須人工獨立驗收。
+
+---
+
 ## P3-00 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P3-00 = **CONDITIONAL PASS**，核准 **P3-00 前置加固階段**結案。

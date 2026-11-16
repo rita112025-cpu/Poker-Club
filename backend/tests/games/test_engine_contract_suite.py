@@ -383,3 +383,181 @@ def test_phase_one_catalog_still_seeds_every_game_as_disabled() -> None:
     text = (root / "migrations" / "versions" / "0001_game_types.py").read_text(encoding="utf-8")
     assert '"enabled": False' in text and '"enabled": True' not in text
     assert '"chinese_poker"' in text
+
+
+# ---- P3-01-0: leaks through extensions, payloads and wording variants ----------------
+
+from dataclasses import dataclass as _dataclass  # noqa: E402
+
+from engine_contract_suite import reveals_card  # noqa: E402
+
+from app.games.core import (  # noqa: E402
+    EventPayload,
+    PublicExtension,
+    register_event_payload,
+    register_public_extension,
+)
+
+
+@register_public_extension
+@_dataclass(frozen=True, slots=True)
+class TableNote(PublicExtension):
+    text: str
+
+    def __post_init__(self) -> None:
+        if type(self.text) is not str:
+            raise TypeError("text must be a string")
+
+
+@register_event_payload
+@_dataclass(frozen=True, slots=True)
+class EventNote(EventPayload):
+    text: str
+
+    def __post_init__(self) -> None:
+        if type(self.text) is not str:
+            raise TypeError("text must be a string")
+
+
+def _leaked_card(state: GameState) -> Card:
+    # A hidden card whose lowercase code is not an ordinary English word, so the test is
+    # deterministic whatever the random deal is (the detector documents that blind spot).
+    pool = (*state.private.players[1].hand, *state.private.remaining_cards)
+    return next(c for c in pool if c.code.lower() not in {"as", "ad", "ah", "ac"})
+
+
+def _hidden_text_for_bob(state: GameState, style: str) -> str:
+    card = _leaked_card(state)
+    return {
+        "code": f"bob holds {card.code}",
+        "lower": f"bob holds {card.code.lower()}",
+        "words": f"bob holds the {card.rank.name.lower()} of {card.suit.name.lower()}",
+    }[style]
+
+
+class NoteEngine(StubEngine):
+    """Passes the extension to every view; subclasses decide what the note says."""
+
+    style = ""
+
+    def _note(self, state: GameState) -> TableNote:
+        return TableNote(_hidden_text_for_bob(state, self.style) if self.style else "table")
+
+    def create_game(
+        self, config: GameConfig, session_id: UUID, players: tuple[Player, ...], deck: Deck
+    ) -> GameState | GameError:
+        out = super().create_game(config, session_id, players, deck)
+        return replace(out, extension=self._note(out)) if isinstance(out, GameState) else out
+
+    def apply_action(
+        self, state: GameState, action: GameAction, payload: StubPayload
+    ) -> ApplyResult | GameError:
+        out = super().apply_action(state, action, payload)
+        if isinstance(out, ApplyResult):
+            return ApplyResult(replace(out.state, extension=state.extension), out.events)
+        return out
+
+    def get_player_view(self, state: GameState, viewer_id: UUID) -> PlayerView | GameError:
+        view = super().get_player_view(state, viewer_id)
+        if isinstance(view, PlayerView):
+            return PlayerView(view.viewer_id, view.public, view.private, state.extension)
+        return view
+
+
+class ExtensionLeaksCode(NoteEngine):
+    style = "code"
+
+
+class ExtensionLeaksLowercase(NoteEngine):
+    style = "lower"
+
+
+class ExtensionLeaksWords(NoteEngine):
+    style = "words"
+
+
+class PayloadLeaksInPublicEvent(StubEngine):
+    def apply_action(
+        self, state: GameState, action: GameAction, payload: StubPayload
+    ) -> ApplyResult | GameError:
+        out = super().apply_action(state, action, payload)
+        if isinstance(out, ApplyResult):
+            note = EventNote(_hidden_text_for_bob(state, "words"))
+            event = GameEvent(out.events[0].seq, "moved", EventVisibility.PUBLIC, payload=note)
+            return ApplyResult(out.state, (event, *out.events[1:]))
+        return out
+
+
+class LeaksWordsInValidationError(StubEngine):
+    def validate_action(
+        self, state: GameState, action: GameAction, payload: StubPayload
+    ) -> ActionValidation:
+        out = super().validate_action(state, action, payload)
+        if out.error is not None:
+            return ActionValidation(GameError(out.error.code, _hidden_text_for_bob(state, "words")))
+        return out
+
+
+class LeaksLowercaseInViewError(StubEngine):
+    def get_player_view(self, state: GameState, viewer_id: UUID) -> PlayerView | GameError:
+        out = super().get_player_view(state, viewer_id)
+        if isinstance(out, GameError):
+            return GameError(out.code, _hidden_text_for_bob(state, "lower"))
+        return out
+
+
+NEW_LEAKERS: list[tuple[str, Callable[[], StubEngine]]] = [
+    ("extension text with a card code", ExtensionLeaksCode),
+    ("extension text with a lowercase code", ExtensionLeaksLowercase),
+    ("extension text with card words", ExtensionLeaksWords),
+    ("public event payload with card words", PayloadLeaksInPublicEvent),
+    ("validation error with card words", LeaksWordsInValidationError),
+    ("view error with a lowercase code", LeaksLowercaseInViewError),
+]
+
+
+@pytest.mark.parametrize("name,engine_type", NEW_LEAKERS, ids=[name for name, _ in NEW_LEAKERS])
+def test_suite_catches_leaks_through_extensions_payloads_and_wording(
+    name: str, engine_type: Callable[[], StubEngine]
+) -> None:
+    with pytest.raises(AssertionError, match="reveal|leak"):
+        check_engine_contract(engine_type(), stub_scenario())
+
+
+def test_harmless_extension_passes_and_revealed_cards_are_exempt() -> None:
+    check_engine_contract(NoteEngine(), stub_scenario())
+
+    class RevealsBobsCard(ExtensionLeaksCode):
+        pass
+
+    base = stub_scenario()
+    scenario = replace(
+        base,
+        revealed=lambda s: frozenset({_leaked_card(s)}),
+    )
+    check_engine_contract(RevealsBobsCard(), scenario)
+
+
+def test_wording_detector_catches_variants_without_flagging_ordinary_text() -> None:
+    two_c, ace_s, ten_h = (Card.from_code(code) for code in ("2C", "AS", "10H"))
+    for text, card in [
+        ("holds 2c.", two_c),
+        ("Two of Clubs", two_c),
+        ("the deuce of clubs", two_c),
+        ("2♣", two_c),
+        ("ten of hearts", ten_h),
+        ("10♥", ten_h),
+        ("ace of spades", ace_s),
+        ("A♠", ace_s),
+        ("AS", ace_s),
+        (repr(two_c), two_c),
+    ]:
+        assert reveals_card(text, card), text
+    for text, card in [
+        ("not allowed as it is not your turn", ace_s),
+        ("the pot is 20", two_c),
+        ("clubs are lovely", two_c),
+        ("raise to 100 chips", ten_h),
+        ("ace", ace_s),
+    ]:
+        assert not reveals_card(text, card), text
