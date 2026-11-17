@@ -22,3 +22,13 @@ button:disabled { cursor: wait; }
 .chip-three { left: 66%; top: 60%; background: #972e31; }
 @media (max-width: 480px) { .felt-table { height: 270px; border-width: 10px; } .brand span { font-size: 12px; letter-spacing: 2px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
+
+/* Prototype table cards */
+.card {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.6rem; height: 3.6rem; border-radius: 0.4rem; font-weight: 600;
+  border: 1px solid rgb(255 255 255 / 0.25);
+}
+.card-black { background: #f5f1e6; color: #1c1917; }
+.card-red { background: #f5f1e6; color: #b91c1c; }
+.card-down { background: repeating-linear-gradient(45deg, #7c2d12, #7c2d12 4px, #9a3412 4px, #9a3412 8px); }

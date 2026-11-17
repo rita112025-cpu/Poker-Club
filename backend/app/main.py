@@ -10,6 +10,10 @@ from app.core.config import get_settings
 from app.db.session import get_session
 
 app = FastAPI(title="Poker Club", version="0.1.0")
+if get_settings().prototype_enabled:
+    from app.prototype.routes import build_router
+
+    app.include_router(build_router(get_settings()))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
