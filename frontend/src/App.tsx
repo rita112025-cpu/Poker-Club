@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { Game } from './Game'
 
 type Health = 'idle' | 'checking' | 'online' | 'offline'
 
 export function App() {
   const [health, setHealth] = useState<Health>('idle')
   const reduceMotion = useReducedMotion()
+  const [playing, setPlaying] = useState(false)
 
   async function checkConnection() {
     setHealth('checking')
@@ -32,7 +34,8 @@ export function App() {
         <a className="brand" href="/" aria-label="Poker Club 首頁">♠ <span>POKER CLUB</span></a>
         <span className="text-xs tracking-widest text-amber-200/80">私人牌桌・好友相聚</span>
       </header>
-      <main className="mx-auto grid max-w-6xl gap-12 py-16 lg:grid-cols-2 lg:items-center lg:py-28">
+      {playing && <main className="mx-auto max-w-6xl py-10"><Game onLeave={() => { setPlaying(false) }} /></main>}
+      {!playing && <main className="mx-auto grid max-w-6xl gap-12 py-16 lg:grid-cols-2 lg:items-center lg:py-28">
         <section>
           <p className="mb-6 text-xs tracking-[0.3em] text-amber-200">THE TABLE IS YOURS</p>
           <h1 className="text-4xl font-semibold leading-tight sm:text-6xl">好牌，好朋友。<br /><span className="text-amber-200">相聚同一桌。</span></h1>
@@ -45,6 +48,8 @@ export function App() {
             disabled={health === 'checking'} onClick={() => { void checkConnection() }}>
             {health === 'checking' ? '檢查中…' : '檢查 API 連線'}
           </button>
+          <button className="ml-3 mt-8 rounded-md border border-emerald-300/60 px-6 py-3 text-sm text-emerald-100 transition hover:bg-emerald-300/10"
+            onClick={() => { setPlaying(true) }}>開始試玩（原型）</button>
           <p role="status" aria-live="polite" className="mt-4 min-h-12 text-sm leading-6 text-stone-400">{statusText[health]}</p>
         </section>
         <motion.div aria-hidden="true" className="table-scene" initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
@@ -56,7 +61,7 @@ export function App() {
           </div>
           <p className="mt-5 text-center text-xs tracking-widest text-stone-500">牌桌視覺示意・非進行中的牌局</p>
         </motion.div>
-      </main>
+      </main>}
       <footer className="mx-auto max-w-6xl border-t border-white/10 pt-6 text-xs leading-6 text-stone-500">POKER CLUB · 僅供休閒娛樂 · 不提供現金下注、兌換或交易</footer>
     </div>
   )
