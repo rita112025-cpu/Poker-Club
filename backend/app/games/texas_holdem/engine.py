@@ -48,7 +48,7 @@ from app.games.texas_holdem.betting import (
 from app.games.texas_holdem.events import ActionTaken
 from app.games.texas_holdem.hand import GAME_TYPE, start_hand, start_hand_for_testing
 from app.games.texas_holdem.rules import TexasRules
-from app.games.texas_holdem.settlement import settle_state
+from app.games.texas_holdem.settlement import apply_settlement, settle_state
 from app.games.texas_holdem.state import HandEnd, TexasPublic
 
 CONFIG_MISMATCH = "config_mismatch"
@@ -61,6 +61,7 @@ BAD_PAYLOAD = "bad_payload"
 ILLEGAL_ACTION = "illegal_action"
 BAD_AMOUNT = "bad_amount"
 NOT_FINISHED = "not_finished"
+ALREADY_SETTLED = "already_settled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,6 +246,32 @@ class TexasEngine:
         )
         events = tuple(
             GameEvent(base_seq + index, type(item).__name__, EventVisibility.PUBLIC, payload=item)
+            for index, item in enumerate(payloads)
+        )
+        return ApplyResult(new_state, events)
+
+    # -- settlement ----------------------------------------------------------------
+
+    def settle_hand(self, state: GameState) -> ApplyResult | GameError:
+        """Apply the settlement of a finished hand to the stacks, once (server side only).
+
+        Not one of the six GameEngine methods: the caller that drives the hand invokes it after
+        the hand ends. The amounts are recomputed from the state, never taken from a client, and
+        a second call returns ALREADY_SETTLED. Emits one HandSettled event.
+        """
+        require_exact(state, GameState, "state")
+        table = state.extension
+        if not isinstance(table, TexasPublic):
+            return GameError(WRONG_GAME, "This is not a Texas hold'em game")
+        if not self.is_game_over(state):
+            return GameError(NOT_FINISHED, "The hand is not finished")
+        if table.settled:
+            return GameError(ALREADY_SETTLED, "The hand has already been settled")
+        new_state, payloads = apply_settlement(state)
+        events = tuple(
+            GameEvent(
+                table.event_seq + index, type(item).__name__, EventVisibility.PUBLIC, payload=item
+            )
             for index, item in enumerate(payloads)
         )
         return ApplyResult(new_state, events)
