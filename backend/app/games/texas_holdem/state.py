@@ -81,6 +81,20 @@ class SeatState:
             raise ValueError("a round commitment cannot exceed the hand commitment")
 
 
+@dataclass(frozen=True, slots=True)
+class ShownHand:
+    """A hole-card pair made public at showdown (every seat still in the hand shows)."""
+
+    seat: int
+    cards: tuple[Card, ...]
+
+    def __post_init__(self) -> None:
+        require_nonnegative_int(self.seat, "seat")
+        require_exact_tuple(self.cards, Card, "cards")
+        if len(self.cards) != 2 or len(set(self.cards)) != 2:
+            raise ValueError("a shown hand is exactly two distinct cards")
+
+
 @register_public_extension
 @dataclass(frozen=True, slots=True)
 class TexasPublic(PublicExtension):
@@ -95,6 +109,7 @@ class TexasPublic(PublicExtension):
     ended: HandEnd = HandEnd.NONE
     event_seq: int = 0  # the sequence number the next event will use
     min_raise: int = 1  # the smallest raise increment (the last full raise, at least the big blind)
+    showdown: tuple[ShownHand, ...] = ()  # hands made public when the hand ends at a showdown
 
     def __post_init__(self) -> None:
         require_enum(self.street, Street, "street")
@@ -108,6 +123,7 @@ class TexasPublic(PublicExtension):
         require_enum(self.ended, HandEnd, "ended")
         require_nonnegative_int(self.event_seq, "event_seq")
         require_nonnegative_int(self.min_raise, "min_raise")
+        require_exact_tuple(self.showdown, ShownHand, "showdown")
         if self.min_raise < 1:
             raise ValueError("min_raise must be at least 1")
         numbers = [seat.seat for seat in self.seats]
@@ -147,6 +163,16 @@ class TexasPublic(PublicExtension):
             raise ValueError("a last-standing ending needs exactly one live seat")
         if self.ended is not HandEnd.LAST_STANDING and live < 2:
             raise ValueError("a hand with one live seat has ended")
+        shown = [hand.seat for hand in self.showdown]
+        expected = [seat.seat for seat in self.seats if not seat.folded]
+        if self.ended is HandEnd.SHOWDOWN:
+            if shown != expected:
+                raise ValueError("every seat still in the hand must show at a showdown")
+            every = [card for hand in self.showdown for card in hand.cards] + list(self.board)
+            if len(every) != len(set(every)):
+                raise ValueError("shown cards must be distinct and not on the board")
+        elif self.showdown:
+            raise ValueError("hands are only shown at a showdown")
 
     def check_consistency(self, public: object) -> None:
         if type(public) is not PublicGameData:

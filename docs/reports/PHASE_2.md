@@ -1,5 +1,146 @@
 # Phase 2 進度報告
 
+## P3-04 正式結案決議 — CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P3-04 = **CONDITIONAL PASS**，核准 **P3-04 階段**（七選五、攤牌亮牌、邊池結算與結果，含 P3-04-0 測試補強）結案。
+本次只更新 `TASKS.md` 與本檔；未修改程式、測試或證據，未開始 P3-05，未做任何 Git 寫入。
+注意：P3-04 的實作與文件尚未提交。
+
+### 驗收範圍與獨立複驗結果
+
+- 範圍：`settlement.py`、`hands.best_of_seven`、`TexasPublic.showdown` 與 `ShownHand`、`betting.advance` 的亮牌、`engine.calculate_result`，以及相關測試與兩份獨立參考。
+- **獨立性限制（須明確記錄）**：複驗由 P3-04 的作者自己執行，不是第三方。已用新方法降低偏差，但**契約文字本身由作者撰寫，無法由這次複驗背書**，須由人工或不熟悉本案的審查者確認。
+- Backend：**665 passed、5 skipped**（複驗連跑 4 次相同）；Mypy、Ruff（僅檢查）、格式檢查、`pip check` 通過；證據檔 45 個來源雜湊與 23 項檢查退出碼皆吻合。
+- 結算：四種寫法不同的實作（引擎、逐籌碼層級暴力、獨立代理參考、複驗新寫的「反覆剝除最小投入」）在 180,159 組新的可達輸入（新種子、2 到 9 座位、投入最大 1000；其中 123,522 組有多個池、123,193 組有並列）完全一致；
+  測試內的小桌窮舉實際為 105,168 種；400 局隨機完整牌局的 `calculate_result` 與「獨立評估器加獨立結算」逐一相符。
+- 七選五：`best_of_seven` 取 21 個五張組合的最大值；全部 2,598,960 手五張牌的窮舉在 `_validate` 重構後仍完全相符（49 秒）；
+  九種七張牌型數量由獨立代理的評估器與引擎各自算出，皆與公認值一致（**點數多重集合乘同花點數集合、組合數加權的類別窮舉，共 190,346 個代表手牌，不是逐一枚舉全部 133,784,560 手**）。
+- 資訊隔離（3000 局探測）：中途狀態不亮牌；攤牌時恰好公開所有未棄牌座位的真實底牌；只剩一人時不亮牌；棄牌者的牌從未公開；視圖只含自己的底牌加已公開的牌；事件 payload 從未含底牌。
+- 回歸：以 `cf78553` 為基準，3000 局隨機對局共 19,024 個狀態的行為軌跡（除 `showdown` 外的全部欄位、私有牌、事件）與目前版本**雜湊完全相同**。
+- 合併規則的實際影響：在 123,450 組有爭奪的桌子中，合併規則改變某人結果的占 2.60%（3,212 組）。
+- 歷史紀錄與各階段證據皆保留，未覆寫。
+
+### 保留條件
+
+1. **契約政策需人工再確認**：合併相鄰同資格層、退回定義、餘數順序、按鈕最後、亮牌全部未棄牌座位、競賽名次。
+   獨立代理只驗證「實作符合契約文字」；其案例無法分辨合併與否，合併規則只由作者手算範例支撐。
+2. **證據可重現性**：精確窮舉腳本（引擎端與代理端）與 27 種變異的清單與輸出只存在暫存目錄，不在 repo；證據檔只記錄結果。
+3. **文字更正**：`PHASE_2.md` 的 P3-04 章節以「窮舉…涵蓋全部 133,784,560 手」描述類別加權計算，應理解為上述 190,346 個代表手牌；
+   「另 6000 組隨機」實際比對 4,364 組（不可達輸入被跳過，測試未斷言最少數量）；「超過 4 萬種」實際為 105,168 種。
+4. **輸入驗證**：`settle`／`odd_chip_order` 不驗證 `button`；有爭奪的池遇到非整數 `button` 會拋 `TypeError`，無爭奪時靜默接受。
+   `best_of_seven` 含 `assert best is not None`（`python -O` 下被移除，實務不可達）；`calculate_result` 遇異常或不可達狀態會拋例外而非回傳 `GameError`（可達狀態未觸發）。
+5. **證據檔**：`P3_04_TEST_EVIDENCE.json` 的 `git_head: null` 與「No commits exist」註記已過時，未記錄基準 commit `cf78553`。
+6. **結算的呼叫端風險**：`calculate_result` 只回傳淨變動，狀態的 `pot` 仍包含未被跟注的部分，沒有「已套用」標記；日後（Phase 5）由呼叫端套用時須確保只套用一次。
+   結算明細（各池金額、資格、得主）尚未公開到狀態、視圖或事件。
+7. **未來相容性**：新的 `TexasPublic` 不變式使 P3-04 之前序列化的攤牌狀態無法載入（目前沒有持久化）；`ShownHand` 的牌是否等於私有底牌，由引擎保證，`check_consistency` 無法驗證。
+8. 入庫的兩份獨立參考被加了 `# noqa` 與格式重排，語意相同（已用 15 萬手比對）但不再是代理原檔。
+9. API 序列化無法驗證（尚無 API 或傳輸層）；`asdict(GameState)` 仍含私有資料。
+10. 沿用前幾階段：燒牌、盲注、籌碼的正式值待確認；措辭偵測為啟發式；信任限制。
+
+### P2-A 持續開放事項（仍未完成）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險：P3-00 已修補並通過複驗，是否正式標為已解決由人工決定。
+- [ ] test-only Deck 與正式引擎的隔離：僅緩解，仍開放。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制：仍開放。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口：仍開放。
+
+### 尚未驗收（P3-04 通過不代表已完成）
+
+- Registry 登記與完整牌局契約驗證（P3-05）；P3-05 同時須處理結算的公開方式與套用機制。
+- Room、GameSession、認證與授權、傳輸層、資料庫整合；PostgreSQL 測試（5 項 skipped，原因：未設定 `TEST_DATABASE_URL`，需要可丟棄的 PostgreSQL）。
+
+---
+
+## P3-04 七選五、攤牌亮牌、邊池結算與結果 — 已人工驗收（見上方結案決議）
+
+日期：2026-11-16（Asia/Taipei）。依 P3-04 設計審查「照建議」實作（五項決策皆採建議）。
+**未開始 P3-05**：未登記進 Registry，沒有 Room、GameSession、認證、傳輸層或資料庫；未 commit。
+P3-03 的**行為**未改變；為實作亮牌與結算，確實修改了 P3-03 已結案的 `betting.py`、`engine.py`、`state.py` 與三個既有測試檔（範圍見下）。
+
+### 採用的決策與已批准的規則契約
+
+1. 契約批准（`settlement.py` 檔頭有完整文字）：① 未被跟注退回：唯一最大投入者取回「最大減第二大」（第二大含已棄牌與 all-in 座位），只做一次、在分池之前；
+   ② 以不同的正數投入層級分層，有資格者＝未棄牌且投入達該層，棄牌籌碼計入金額但永不得池；③ **相鄰且資格相同的層先合併再分配**；
+   ④ 每池在有資格者中比七選五，唯一有資格者直接得池；平手均分，餘數從「按鈕左側第一個座位」起順時針逐枚發給平手者，**按鈕座位最後**，每池各自計算；
+   ⑤ 只剩一人：不比牌、不亮牌，得全部；⑥ 淨變動＝退回＋獲得－投入，總和為 0。
+2. 攤牌亮牌：牌局以 `SHOWDOWN` 結束時，**所有未棄牌座位的底牌公開**（不可蓋牌），公開在 `TexasPublic.showdown`；只剩一人時不亮牌。
+3. 名次：依 `points_delta` 由高到低的競賽排名（並列同名次，例如 1、1、3）。
+4. 結算為純函式 `settle`／`settle_state`，**不改動狀態、不發新事件**；`calculate_result` 回傳各玩家的淨變動與名次（不是最終籌碼）。
+5. 獨立性：派兩個獨立代理，**只憑文字**撰寫參考實作（結算參考、七張牌評估器）。
+6. P3-04-0（只加測試）一併完成：多組盲注結構與「對手棄牌或 all-in 時不可加注」情境。
+
+**契約範例更正**：設計審查稿的範例 5（兩個各 5 的相同資格層）無法由投入量建構。實際需要的是：兩位玩家各棄牌投入 3、三位玩家各投入 10 且其中兩位平手，
+合併成 36 各得 18；若不合併，15 與 21 各自分餘數會變成 19 與 17。測試已改用此例。
+
+### 新增與契約變更（須人工確認）
+
+- `hands.best_of_seven(cards)`：恰好 7 張相異精確 `Card`，取 21 個五張組合的最大值（擴充已結案的 `hands.py`，`evaluate_five` 不變）。
+- `settlement.py`：`Pot`、`Refund`、`Award`、`Settlement`（精確型別驗證與守恆檢查）、`build_pots`、`split_pot`、`odd_chip_order`、`settle`、`settle_state`。
+  現實中不可能出現的輸入（已棄牌座位持有最大投入、無人有資格的層、無人留在局中）**一律拒絕**（fail closed）。
+- `TexasPublic.showdown`（新增，預設空）與 `ShownHand`；不變式：`SHOWDOWN` 結束時必須恰好是所有未棄牌座位亮牌、牌彼此相異且不在公共牌上；其他情況必須為空。
+- `betting.advance` 在河牌後或無人可下注而進入攤牌時建立 `showdown`；`TexasEngine.calculate_result` 實作（`not_implemented` 錯誤碼已移除）。
+- 既有測試調整：`test_texas_engine.py`（結果測試改為實際結算、新增 `shown_cards` 豁免輔助）、`test_texas_raising.py`（契約套件改為 `results_supported=True` 並豁免已亮的牌）、
+  `test_texas_setup.py`（欄位矩陣補 `showdown`、新增亮牌不變式測試）。
+- 兩份獨立參考已納入測試目錄並註明來源：`settlement_reference_independent.py`、`seven_card_reference_independent.py`。
+
+### 測試與獨立驗證
+
+- `test_texas_settlement.py` 22 項：範例 1 到 5、按鈕座位最後拿餘數、單人無需比牌；**暴力 oracle**（逐籌碼層級掃描，與引擎的排序加差分寫法不同）、獨立代理的結算參考、引擎三方比對：
+  2 到 3 座位、投入 0 到 6、所有棄牌與牌力並列組合，共超過 4 萬種全部一致；另 6000 組隨機（2 到 9 座位）一致；守恆、棄牌者不得獲池、有資格者才得池；
+  經引擎發固定牌的端到端情境（單挑、平手與奇數籌碼、短額 all-in 只贏主池、未被跟注的退回、棄牌後不亮牌、名次並列）；
+  **400 局隨機完整牌局**（含加注、邊池與平手）的 `calculate_result`，與「獨立七張評估器加獨立結算」逐一相符。
+- `test_texas_seven.py` 31 項：19 個手算案例（皇家同花順、6 張同花順、輪牌、鐵支加三條、雙三條、三對的踢腳、不環繞等）、與獨立評估器的差分（隨機 3000 手、集中少數點數 2500 手、同花集中 1500 手）、輸入驗證、花色與順序無關。
+- **精確窮舉（一次性，不在測試套件內）**：以獨立代理的列舉方法（點數多重集合乘上同花點數集合，組合數加權）涵蓋全部 133,784,560 手：
+  代理的評估器與**引擎的 `best_of_seven`（190,346 個代表手牌，約 92 秒）**各自算出的九種牌型數量，全部與公認值完全相符
+  （同花順 41,584 含皇家 4,324；鐵支 224,848；葫蘆 3,473,184；同花 4,047,644；順子 6,180,020；三條 6,461,620；兩對 31,433,400；一對 58,627,800；高牌 23,294,460），已記錄於證據檔 `manual_exact_seven_card_check`。
+- `test_texas_blinds.py` 13 項（P3-04-0，只加測試）：盲注 1/2、3/7、25/50、100/250 下的最低下注、最低加注鏈、短額大盲、每街重置；以及 4 人桌情境（UTG 棄牌、小盲與大盲短籌碼 all-in，按鈕位只能跟注或棄牌）。
+  P3-03 複驗中存活的兩個變異（盲注寫死為 10、把棄牌座位算成對手）現在都被抓到。
+- 副本上 27 種變異（結算各環節、七選五、亮牌、名次、P3-03 的兩個缺口）：25 種直接被抓到；`state: showdown rule off` 最初存活，補測試後被抓到；
+  另有 1 種（以錯誤座位底牌評估）補上正確的變異字串後被抓到。
+
+### 實際結果
+
+環境：3.12.10，Windows-11-10.0.26300-SP0，PYTHONDONTWRITEBYTECODE=1、PYTEST_DISABLE_PLUGIN_AUTOLOAD=1。
+- P3-04 settlement：exit 0；22 passed in 9.90s
+- P3-04 seven-card：exit 0；31 passed in 3.27s
+- P3-04-0 blinds：exit 0；13 passed in 0.32s
+- P3-03 texas raising：exit 0；19 passed in 1.30s
+- P3-02 texas engine：exit 0；30 passed in 5.73s
+- P3-01 texas setup：exit 0；60 passed in 0.45s
+- P3-00 extensions：exit 0；21 passed in 0.12s
+- P3-00 deck failure and isolation：exit 0；7 passed in 0.97s
+- P2-F projection：exit 0；15 passed in 0.12s
+- P2-F contract suite：exit 0；31 passed in 1.43s
+- P2-E texas hands：exit 0；55 passed in 3.10s
+- P2-D registry：exit 0；34 passed in 0.15s
+- P2-C engine contract：exit 0；28 passed in 0.15s
+- R2 public field matrix：exit 0；25 passed in 0.11s
+- R1 public isolation：exit 0；19 passed in 0.13s
+- Original P2-B regression：exit 0；124 passed in 1.95s
+- P2-A regression：exit 0；127 passed in 0.21s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.84s
+- Mypy：exit 0；Success: no issues found in 52 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；59 files already formatted
+- Full backend suite：exit 0；665 passed, 5 skipped, 1 warning in 28.70s
+- pip check：exit 0；No broken requirements found.
+
+完整 backend **665 passed、5 skipped**（598＋67；連跑 3 次穩定；5 項 PostgreSQL 測試仍未驗證通過）。證據檔 `P3_04_TEST_EVIDENCE.json`；
+`settlement.py` SHA-256 `ec0fda0a3ea5a32ef20aa1bbe643af24cb85299871c4d8b657ab11fd9a99dfb6`；`hands.py` `8aa61ca3db938fb1401f8ed9b06c2bf35ede32dd70fb289253c1b6f9fef87c14`；`betting.py` `6dc56d39779327f247b09a8c74c17025af7bcee69189f253e3bc59931a750d4f`；`test_texas_settlement.py` `9293824bf6b27467a676b2367decd7b792feb785e1f036e0bbd6b2d722fcae94`。
+B／R1／R2／C／D／E／F／P3-00／P3-01／P3-02／P3-03 證據未覆寫。
+
+### 尚未解決的限制
+
+- 這些契約選擇（合併規則、退回定義、餘數順序、按鈕最後、亮牌全部未棄牌座位、競賽名次）雖經「照建議」批准，仍須在獨立複驗中檢視；獨立代理只驗證「實作符合契約文字」，不驗證「契約文字就是正確的德州規則」。
+- 結算明細（各池金額、資格與獲得者）只在 `settle_state` 的回傳值中，**尚未公開到 `TexasPublic`、視圖或事件**；前端需要時再決定公開方式。`calculate_result` 只回傳淨變動與名次。
+- `best_of_seven` 每次約 1 毫秒（21 次五張評估），攤牌結算每席約 1 毫秒，目前可接受，未做效能優化。
+- 現實中不可能的結算輸入採 fail-closed 拒絕，獨立結算參考對這類輸入的行為不同，測試只餵可達輸入。
+- 未被跟注的部分現在會在結算退回，但 P3-03 的下注階段仍把它留在底池（狀態中的 `pot` 不扣退回），兩者的一致性由結算函式保證。
+- 燒牌、盲注、籌碼的正式值仍待確認；措辭偵測仍為啟發式；P2-A 風險 2、3、4 與 PostgreSQL 5 項測試仍開放。
+- Registry 登記（P3-05）、Room、GameSession、認證、傳輸層、資料庫整合未實作。P3-04 是否結案須人工獨立驗收。
+
+---
+
 ## P3-03 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P3-03 = **CONDITIONAL PASS**，核准 **P3-03 階段**（無限注下注規則：bet、raise、all-in、最小加注、重新開放，以及建局時一輪無須行動的統一處理）結案。

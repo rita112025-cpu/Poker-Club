@@ -13,6 +13,7 @@ Runtime imports the whole app.games.core package; the static dependency is Card 
 
 from dataclasses import dataclass
 from enum import Enum
+from itertools import combinations
 
 from app.games.core.card import Card, Rank
 
@@ -130,17 +131,21 @@ class HandRank:
         return (_STRENGTH[self.category], self.tiebreak)
 
 
-def _validate(cards: object) -> tuple[Card, ...]:
+def _validate_count(cards: object, count: int) -> tuple[Card, ...]:
     if type(cards) is not tuple:
         raise TypeError("cards must be a tuple")
-    if len(cards) != HAND_SIZE:
-        raise ValueError(f"a hand must contain exactly {HAND_SIZE} cards")
+    if len(cards) != count:
+        raise ValueError(f"a hand must contain exactly {count} cards")
     for card in cards:
         if type(card) is not Card:
             raise TypeError("cards must contain only exact Card instances")
-    if len(set(cards)) != HAND_SIZE:
+    if len(set(cards)) != count:
         raise ValueError("a hand cannot contain duplicate cards")
     return cards
+
+
+def _validate(cards: object) -> tuple[Card, ...]:
+    return _validate_count(cards, HAND_SIZE)
 
 
 def evaluate_five(cards: tuple[Card, ...]) -> HandRank:
@@ -193,3 +198,19 @@ def compare(first: HandRank, second: HandRank) -> int:
     if first.sort_key > second.sort_key:
         return 1
     return 0
+
+
+SEVEN = 7
+
+
+def best_of_seven(cards: tuple[Card, ...]) -> HandRank:
+    """The best five-card hand among exactly seven distinct cards (two hole cards plus a full
+    board). Equal results are exact ties; suits never break them. Invalid input raises."""
+    hand = _validate_count(cards, SEVEN)
+    best: HandRank | None = None
+    for chosen in combinations(hand, HAND_SIZE):
+        rank = evaluate_five(chosen)
+        if best is None or rank.sort_key > best.sort_key:
+            best = rank
+    assert best is not None
+    return best

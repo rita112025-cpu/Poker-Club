@@ -19,6 +19,7 @@ from test_texas_engine import (
     ext,
     new_hand,
     pid,
+    shown_cards,
     turn_seat,
 )
 
@@ -360,8 +361,8 @@ def test_the_contract_suite_passes_when_the_script_bets_and_raises() -> None:
         illegal,
         stale,
         after_over,
-        revealed=lambda state: frozenset(ext(state).board),
-        results_supported=False,
+        revealed=shown_cards,
+        results_supported=True,
     )
     check_engine_contract(engine, scenario)
 

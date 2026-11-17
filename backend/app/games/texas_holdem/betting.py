@@ -27,7 +27,7 @@ from app.games.core.extensions import EventPayload
 from app.games.core.models import GameState, GameStatus, Turn
 from app.games.texas_holdem.events import HandEnded, StreetDealt
 from app.games.texas_holdem.positions import next_seat
-from app.games.texas_holdem.state import HandEnd, SeatState, Street, TexasPublic
+from app.games.texas_holdem.state import HandEnd, SeatState, ShownHand, Street, TexasPublic
 
 FOLD = "fold"
 CHECK = "check"
@@ -164,6 +164,14 @@ def _deal_next_street(
     return updated, remaining[skip + count :], cards
 
 
+def _shown_hands(state: GameState, ext: TexasPublic) -> tuple[ShownHand, ...]:
+    """The hole cards of every seat still in the hand (the showdown reveal)."""
+    hands = {item.player_id: item.hand for item in state.private.players}
+    return tuple(
+        ShownHand(seat.seat, hands[seat.player_id]) for seat in ext.seats if not seat.folded
+    )
+
+
 def advance(
     state: GameState,
     ext: TexasPublic,
@@ -198,7 +206,12 @@ def advance(
             turn_player = chosen.player_id
             break
         if ext.street is Street.RIVER:
-            ext = replace(ext, street=Street.SHOWDOWN, ended=HandEnd.SHOWDOWN)
+            ext = replace(
+                ext,
+                street=Street.SHOWDOWN,
+                ended=HandEnd.SHOWDOWN,
+                showdown=_shown_hands(state, ext),
+            )
             events.append(HandEnded(HandEnd.SHOWDOWN))
             status = GameStatus.FINISHED
             break

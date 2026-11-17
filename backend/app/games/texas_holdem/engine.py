@@ -1,7 +1,7 @@
-"""TexasEngine (P3-02, P3-03): the six GameEngine methods for no-limit betting rounds.
+"""TexasEngine (P3-02 to P3-04): the six GameEngine methods for no-limit hold'em hands.
 
-Not registered anywhere yet (Registry integration is P3-05). calculate_result reports
-"not implemented" until settlement exists (P3-04). Expected rejections are GameError data
+Not registered anywhere yet (Registry integration is P3-05). calculate_result settles a
+finished hand without changing the state. Expected rejections are GameError data
 and never echo cards. A fixed-order deck can only enter through create_game_for_testing,
 which no application module may call (static guard test).
 """
@@ -17,6 +17,7 @@ from app.games.core.engine_types import (
     GameConfig,
     GameEvent,
     GameResult,
+    PlayerResult,
 )
 from app.games.core.models import (
     GameAction,
@@ -47,6 +48,7 @@ from app.games.texas_holdem.betting import (
 from app.games.texas_holdem.events import ActionTaken
 from app.games.texas_holdem.hand import GAME_TYPE, start_hand, start_hand_for_testing
 from app.games.texas_holdem.rules import TexasRules
+from app.games.texas_holdem.settlement import settle_state
 from app.games.texas_holdem.state import HandEnd, TexasPublic
 
 CONFIG_MISMATCH = "config_mismatch"
@@ -59,7 +61,6 @@ BAD_PAYLOAD = "bad_payload"
 ILLEGAL_ACTION = "illegal_action"
 BAD_AMOUNT = "bad_amount"
 NOT_FINISHED = "not_finished"
-NOT_IMPLEMENTED = "not_implemented"
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,6 +258,23 @@ class TexasEngine:
         return state.public.status is GameStatus.FINISHED
 
     def calculate_result(self, state: GameState) -> GameResult | GameError:
+        """Settle a finished hand: points_delta is each player's net chip change; rank is a
+        competition ranking by that change (best first, equal changes share a rank)."""
+        require_exact(state, GameState, "state")
+        if not isinstance(state.extension, TexasPublic):
+            return GameError(WRONG_GAME, "This is not a Texas hold'em game")
         if not self.is_game_over(state):
             return GameError(NOT_FINISHED, "The hand is not finished")
-        return GameError(NOT_IMPLEMENTED, "Settlement is not implemented yet")
+        settlement = settle_state(state)
+        change = dict(settlement.deltas)
+        by_player = {seat.player_id: change[seat.seat] for seat in state.extension.seats}
+        return GameResult(
+            tuple(
+                PlayerResult(
+                    player_id,
+                    delta,
+                    1 + sum(1 for other in by_player.values() if other > delta),
+                )
+                for player_id, delta in by_player.items()
+            )
+        )

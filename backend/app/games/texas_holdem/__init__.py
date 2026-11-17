@@ -4,7 +4,13 @@ from app.games.texas_holdem.betting import LegalActions, legal_actions
 from app.games.texas_holdem.engine import TexasEngine, TexasPayload
 from app.games.texas_holdem.events import ActionTaken, HandEnded, StreetDealt
 from app.games.texas_holdem.hand import start_hand
-from app.games.texas_holdem.hands import HandCategory, HandRank, compare, evaluate_five
+from app.games.texas_holdem.hands import (
+    HandCategory,
+    HandRank,
+    best_of_seven,
+    compare,
+    evaluate_five,
+)
 from app.games.texas_holdem.positions import (
     Positions,
     initial_button,
@@ -13,9 +19,26 @@ from app.games.texas_holdem.positions import (
     positions,
 )
 from app.games.texas_holdem.rules import TexasRules
-from app.games.texas_holdem.state import HandEnd, SeatState, Street, TexasPublic
+from app.games.texas_holdem.settlement import (
+    Award,
+    Pot,
+    Refund,
+    Settlement,
+    build_pots,
+    settle,
+    settle_state,
+)
+from app.games.texas_holdem.state import HandEnd, SeatState, ShownHand, Street, TexasPublic
 
 __all__ = [
+    "Award",
+    "Pot",
+    "Refund",
+    "Settlement",
+    "ShownHand",
+    "build_pots",
+    "settle",
+    "settle_state",
     "ActionTaken",
     "HandEnd",
     "HandEnded",
@@ -31,6 +54,7 @@ __all__ = [
     "Street",
     "TexasPublic",
     "TexasRules",
+    "best_of_seven",
     "compare",
     "evaluate_five",
     "initial_button",

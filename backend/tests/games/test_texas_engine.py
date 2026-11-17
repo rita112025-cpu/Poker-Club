@@ -22,6 +22,7 @@ from app.games.core import (
     GameConfig,
     GameEngine,
     GameError,
+    GameResult,
     GameState,
     GameStatus,
     Player,
@@ -460,14 +461,16 @@ def test_create_game_checks_configuration_and_the_production_deck_gate() -> None
     assert isinstance(engine.create_game(CONFIG, SESSION, players[:1], Deck()), GameError)
 
 
-def test_result_is_unavailable_until_settlement_exists() -> None:
+def test_result_is_unavailable_until_the_hand_is_over_and_then_settles() -> None:
     engine, state = new_hand({0: 100, 1: 100}, 0)
     early = engine.calculate_result(state)
     assert isinstance(early, GameError) and early.code == "not_finished"
-    state, _ = act(engine, state, "fold")
+    state, _ = act(engine, state, "fold")  # the small blind folds: the big blind wins 5
     assert engine.is_game_over(state)
     late = engine.calculate_result(state)
-    assert isinstance(late, GameError) and late.code == "not_implemented"
+    assert isinstance(late, GameResult)
+    by_player = {p.player_id: (p.points_delta, p.rank) for p in late.players}
+    assert by_player == {pid(1): (5, 1), pid(0): (-5, 2)}
 
 
 # ---- shared contract suite ----------------------------------------------------------
@@ -508,13 +511,19 @@ def test_the_shared_contract_suite_passes_for_the_fold_check_call_engine() -> No
         illegal,
         stale,
         after_over,
-        revealed=lambda state: frozenset(ext(state).board),
-        results_supported=False,
+        revealed=shown_cards,
+        results_supported=True,
     )
     check_engine_contract(engine, scenario)
 
 
 # ---- random playouts: invariants after every step ----------------------------------------
+
+
+def shown_cards(state: GameState) -> frozenset[Card]:
+    """Cards the engine has made public: the board and any hands shown at a showdown."""
+    table = ext(state)
+    return frozenset(table.board) | frozenset(c for hand in table.showdown for c in hand.cards)
 
 
 def check_invariants(state: GameState, previous: GameState | None, total: int) -> None:

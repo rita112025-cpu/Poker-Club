@@ -35,6 +35,7 @@ from app.games.texas_holdem import (
     HandEnded,
     Positions,
     SeatState,
+    ShownHand,
     Street,
     StreetDealt,
     TexasPublic,
@@ -238,9 +239,11 @@ MATRICES[TexasPublic] = FieldMatrix(
         "ended": "enum",
         "event_seq": "nonneg_int",
         "min_raise": "nonneg_int",
+        "showdown": "tuple",
     },
     {
         "min_raise": [0],
+        "showdown": [(ShownHand(0, (Card.from_code("AS"), Card.from_code("KS"))),)],
         "ended": [HandEnd.LAST_STANDING, HandEnd.SHOWDOWN, SeatState],
         "current_bet": [9, 11],
         "street": [SeatState, Street.FLOP, Street.SHOWDOWN],
@@ -559,3 +562,48 @@ def test_a_seat_cannot_have_seen_a_bet_higher_than_the_current_bet() -> None:
         texas_public(seats=raised)
     ok = (seats[0], seats[1], replace(seats[2], bet_seen=10))
     assert texas_public(seats=ok).seats[2].bet_seen == 10
+
+
+def test_a_showdown_table_must_show_exactly_the_seats_still_in_with_distinct_cards() -> None:
+    def showdown_table(**overrides: Any) -> TexasPublic:
+        seats = texas_public().seats
+        fields: dict[str, Any] = {
+            "street": Street.SHOWDOWN,
+            "ended": HandEnd.SHOWDOWN,
+            "board": tuple(Card.from_code(c) for c in ("2C", "7D", "9H", "JC", "3S")),
+            "seats": seats,
+            "showdown": (
+                ShownHand(0, (Card.from_code("AS"), Card.from_code("KS"))),
+                ShownHand(1, (Card.from_code("AD"), Card.from_code("KD"))),
+                ShownHand(2, (Card.from_code("AH"), Card.from_code("KH"))),
+            ),
+        }
+        fields.update(overrides)
+        return texas_public(**fields)
+
+    assert len(showdown_table().showdown) == 3
+    live_two = (showdown_table().seats[0], showdown_table().seats[1])
+    with pytest.raises(ValueError, match="must show"):  # a seat that is still in does not show
+        showdown_table(showdown=showdown_table().showdown[:2])
+    with pytest.raises(ValueError, match="must show"):  # extra seats cannot show
+        showdown_table(showdown=(*showdown_table().showdown, showdown_table().showdown[0]))
+    with pytest.raises(ValueError, match="distinct"):  # a shown card that is also on the board
+        showdown_table(
+            showdown=(
+                ShownHand(0, (Card.from_code("2C"), Card.from_code("KS"))),
+                *showdown_table().showdown[1:],
+            )
+        )
+    with pytest.raises(ValueError, match="distinct"):  # the same card shown twice
+        showdown_table(
+            showdown=(
+                ShownHand(0, (Card.from_code("AS"), Card.from_code("KS"))),
+                ShownHand(1, (Card.from_code("AS"), Card.from_code("KD"))),
+                showdown_table().showdown[2],
+            )
+        )
+    assert live_two  # the table helper really has three live seats
+    with pytest.raises(ValueError):
+        ShownHand(0, (Card.from_code("AS"),))
+    with pytest.raises(ValueError):
+        ShownHand(0, (Card.from_code("AS"), Card.from_code("AS")))
