@@ -62,6 +62,8 @@ class SeatState:
     # The current bet this seat faced (or made) when it last acted this round. A seat may
     # raise again only if the bet has since grown by at least the minimum raise.
     bet_seen: int = 0
+    # Chips this seat received at settlement (its refund plus its winnings); 0 before then.
+    payout: int = 0
 
     def __post_init__(self) -> None:
         require_nonnegative_int(self.seat, "seat")
@@ -73,6 +75,7 @@ class SeatState:
         require_nonnegative_int(self.street_committed, "street_committed")
         require_bool(self.acted, "acted")
         require_nonnegative_int(self.bet_seen, "bet_seen")
+        require_nonnegative_int(self.payout, "payout")
         if self.all_in != (self.stack == 0):
             raise ValueError("a seat is all-in exactly when it has no chips left")
         if self.all_in and self.folded:
@@ -110,6 +113,7 @@ class TexasPublic(PublicExtension):
     event_seq: int = 0  # the sequence number the next event will use
     min_raise: int = 1  # the smallest raise increment (the last full raise, at least the big blind)
     showdown: tuple[ShownHand, ...] = ()  # hands made public when the hand ends at a showdown
+    settled: bool = False  # True once the settlement has been applied to the stacks (once only)
 
     def __post_init__(self) -> None:
         require_enum(self.street, Street, "street")
@@ -124,6 +128,7 @@ class TexasPublic(PublicExtension):
         require_nonnegative_int(self.event_seq, "event_seq")
         require_nonnegative_int(self.min_raise, "min_raise")
         require_exact_tuple(self.showdown, ShownHand, "showdown")
+        require_bool(self.settled, "settled")
         if self.min_raise < 1:
             raise ValueError("min_raise must be at least 1")
         numbers = [seat.seat for seat in self.seats]
@@ -163,6 +168,15 @@ class TexasPublic(PublicExtension):
             raise ValueError("a last-standing ending needs exactly one live seat")
         if self.ended is not HandEnd.LAST_STANDING and live < 2:
             raise ValueError("a hand with one live seat has ended")
+        if self.settled and self.ended is HandEnd.NONE:
+            raise ValueError("only a finished hand can be settled")
+        if any(seat.folded and seat.payout for seat in self.seats):
+            raise ValueError("a folded seat cannot receive chips")
+        if self.settled:
+            if sum(seat.payout for seat in self.seats) != self.pot:
+                raise ValueError("a settled hand must pay out exactly the pot")
+        elif any(seat.payout for seat in self.seats):
+            raise ValueError("nothing is paid out before the settlement")
         shown = [hand.seat for hand in self.showdown]
         expected = [seat.seat for seat in self.seats if not seat.folded]
         if self.ended is HandEnd.SHOWDOWN:
@@ -181,7 +195,13 @@ class TexasPublic(PublicExtension):
         if [(s.seat, s.player_id) for s in self.seats] != [(p.seat, p.id) for p in players]:
             raise ValueError("extension seats must match the players")
         for seat, player in zip(self.seats, players, strict=True):
-            if seat.stack + seat.committed != player.points:
+            if self.settled:
+                expected = player.points - seat.committed + seat.payout
+                if seat.stack != expected:
+                    raise ValueError(
+                        "a settled stack is its starting points minus its stake plus its payout"
+                    )
+            elif seat.stack + seat.committed != player.points:
                 raise ValueError("chips must add up to the player's starting points")
         finished = public.status is GameStatus.FINISHED
         if finished != (self.ended is not HandEnd.NONE):

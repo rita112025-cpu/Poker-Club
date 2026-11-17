@@ -51,6 +51,17 @@ class StreetDealt(EventPayload):
 
 @register_event_payload
 @dataclass(frozen=True, slots=True)
+class HandSettled(EventPayload):
+    """The settlement was applied to the stacks. Deliberately carries no detail: what else is
+    made public about a settlement (pot breakdown, winners) is an open policy decision, and
+    every seat's payout is already visible as SeatState.payout in the table data."""
+
+    def __post_init__(self) -> None:
+        pass
+
+
+@register_event_payload
+@dataclass(frozen=True, slots=True)
 class HandEnded(EventPayload):
     reason: HandEnd
 

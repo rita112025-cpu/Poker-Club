@@ -33,6 +33,7 @@ from app.games.texas_holdem import (
     ActionTaken,
     HandEnd,
     HandEnded,
+    HandSettled,
     Positions,
     SeatState,
     ShownHand,
@@ -218,6 +219,7 @@ MATRICES[SeatState] = FieldMatrix(
         "street_committed": "nonneg_int",
         "acted": "bool",
         "bet_seen": "nonneg_int",
+        "payout": "nonneg_int",
     },
     {
         "all_in": [True],  # all-in while chips remain
@@ -240,9 +242,11 @@ MATRICES[TexasPublic] = FieldMatrix(
         "event_seq": "nonneg_int",
         "min_raise": "nonneg_int",
         "showdown": "tuple",
+        "settled": "bool",
     },
     {
         "min_raise": [0],
+        "settled": [True],  # a hand that has not ended cannot be settled
         "showdown": [(ShownHand(0, (Card.from_code("AS"), Card.from_code("KS"))),)],
         "ended": [HandEnd.LAST_STANDING, HandEnd.SHOWDOWN, SeatState],
         "current_bet": [9, 11],
@@ -275,6 +279,7 @@ MATRICES[StreetDealt] = FieldMatrix(
         "cards": [(Card.from_code("AS"),) * 3, (cast(Any, "AS"),) * 3, ()],
     },
 )
+MATRICES[HandSettled] = FieldMatrix(lambda **kw: HandSettled(**kw), {})
 MATRICES[HandEnded] = FieldMatrix(
     lambda **kw: HandEnded(**{"reason": HandEnd.SHOWDOWN, **kw}),
     {"reason": "enum"},
@@ -290,7 +295,7 @@ def test_texas_field_matrices_reject_every_attack(cls: type) -> None:
 def test_every_registered_extension_and_payload_under_app_has_a_field_matrix() -> None:
     registered = registered_public_extensions() | registered_event_payloads()
     app_classes = {c for c in registered if c.__module__.startswith("app.")}
-    assert {TexasPublic, ActionTaken, StreetDealt, HandEnded} <= app_classes
+    assert {TexasPublic, ActionTaken, StreetDealt, HandEnded, HandSettled} <= app_classes
     assert not [c.__name__ for c in app_classes if c not in MATRICES], "add a field matrix"
 
 
