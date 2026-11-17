@@ -2,7 +2,7 @@
 
 from app.games.texas_holdem.betting import LegalActions, legal_actions
 from app.games.texas_holdem.engine import TexasEngine, TexasPayload
-from app.games.texas_holdem.events import ActionTaken, HandEnded, StreetDealt
+from app.games.texas_holdem.events import ActionTaken, HandEnded, HandSettled, StreetDealt
 from app.games.texas_holdem.hand import start_hand
 from app.games.texas_holdem.hands import (
     HandCategory,
@@ -18,12 +18,18 @@ from app.games.texas_holdem.positions import (
     next_seat,
     positions,
 )
+from app.games.texas_holdem.registration import (
+    TEXAS_CODE,
+    register_texas_holdem,
+    texas_registration,
+)
 from app.games.texas_holdem.rules import TexasRules
 from app.games.texas_holdem.settlement import (
     Award,
     Pot,
     Refund,
     Settlement,
+    apply_settlement,
     build_pots,
     settle,
     settle_state,
@@ -31,6 +37,11 @@ from app.games.texas_holdem.settlement import (
 from app.games.texas_holdem.state import HandEnd, SeatState, ShownHand, Street, TexasPublic
 
 __all__ = [
+    "HandSettled",
+    "TEXAS_CODE",
+    "apply_settlement",
+    "register_texas_holdem",
+    "texas_registration",
     "Award",
     "Pot",
     "Refund",

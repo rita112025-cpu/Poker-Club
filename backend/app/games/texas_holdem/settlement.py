@@ -21,14 +21,16 @@ layer nobody can win, cannot arise in a real hand and is rejected (fail closed).
 """
 
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from app.games.core.extensions import EventPayload
 from app.games.core.models import GameState, GameStatus
 from app.games.core.validation import (
     require_exact,
     require_exact_tuple,
     require_nonnegative_int,
 )
+from app.games.texas_holdem.events import HandSettled
 from app.games.texas_holdem.hands import best_of_seven
 from app.games.texas_holdem.state import HandEnd, TexasPublic
 
@@ -201,3 +203,43 @@ def settle_state(state: GameState) -> Settlement:
                     (*hands[seat.player_id], *table.board)
                 ).sort_key
     return settle(committed, folded, strengths, table.button_seat)
+
+
+def apply_settlement(state: GameState) -> tuple[GameState, list[EventPayload]]:
+    """Apply the settlement of a finished hand to the stacks, ONCE.
+
+    This is the only place that changes chips after a hand: settle_state computes (pure) and
+    this function applies. Each seat's stack grows by its payout (refund plus winnings), the
+    payout is recorded on the seat, `settled` is set and the state version moves on by one with
+    one HandSettled event. A second call is refused (the marker), so a result can never be
+    applied twice, and nothing here accepts a settlement from outside: the amounts are always
+    recomputed from the state itself.
+    """
+    settlement = settle_state(state)
+    table = state.extension
+    if not isinstance(table, TexasPublic):
+        raise TypeError("state has no Texas table data")
+    if table.settled:
+        raise ValueError("the hand is already settled")
+    gained: dict[int, int] = {}
+    for refund in settlement.refunds:
+        gained[refund.seat] = gained.get(refund.seat, 0) + refund.amount
+    for award in settlement.awards:
+        gained[award.seat] = gained.get(award.seat, 0) + award.amount
+    seats = tuple(
+        replace(
+            seat,
+            stack=seat.stack + gained.get(seat.seat, 0),
+            payout=gained.get(seat.seat, 0),
+            all_in=seat.stack + gained.get(seat.seat, 0) == 0,
+        )
+        for seat in table.seats
+    )
+    if sum(gained.values()) != table.pot:
+        raise ValueError("the settlement must distribute exactly the pot")
+    if sum(seat.stack for seat in seats) != sum(player.points for player in state.public.players):
+        raise ValueError("chips must be conserved by the settlement")
+    events: list[EventPayload] = [HandSettled()]
+    new_table = replace(table, seats=seats, settled=True, event_seq=table.event_seq + len(events))
+    public = replace(state.public, state_version=state.public.state_version + 1)
+    return replace(state, public=public, extension=new_table), events

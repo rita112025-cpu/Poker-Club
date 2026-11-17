@@ -1,5 +1,123 @@
 # Phase 2 進度報告
 
+## P3-05 Registry 登記機制、完整規則契約、結算套用與公開 — 正式結案決議 CONDITIONAL PASS（僅文件更新）
+
+人工驗收決議：P3-05 = **CONDITIONAL PASS**，核准 **P3-05 階段**結案。本節同時是 P3-05 的階段報告（實作內容、結果與限制）。
+本次文件更新只動 `TASKS.md`、本檔、`docs/TEXAS_HOLDEM_CONTRACT.md`（更正來源行號）並新增 `P3_05_TEST_EVIDENCE.json`；
+未修改任何程式或測試，未開始 P3-06，未做任何 Git 寫入。注意：P3-05 的實作與文件尚未提交。
+
+### 授權範圍與阻擋處理
+
+授權範圍：Registry 登記、完整規則契約、P3-04 結算結果的公開／套用／事件整合、測試與回歸。依指示，**未確認的政策沒有被補完**：
+政策不阻擋的部分已完成；依賴政策的部分已停止，列在「需要使用者確認」。未實作 Room、認證、傳輸層、完整多人流程、前端；沒有任何 PostgreSQL 假通過標記（仍是 5 項 skipped）。
+
+### 修改與新增的檔案
+
+- 修改：`texas_holdem/__init__.py`、`engine.py`（`settle_hand`）、`events.py`（`HandSettled`）、`settlement.py`（`apply_settlement`）、`state.py`（`SeatState.payout`、`TexasPublic.settled` 與不變式）、`tests/games/test_texas_setup.py`（只補欄位矩陣項目並加強一個斷言，**沒有放寬任何既有斷言**，沒有刪除或改名任何既有測試）。
+- 新增：`texas_holdem/registration.py`、`tests/games/test_texas_registry.py`、`test_texas_settlement_apply.py`、`test_texas_contract_traceability.py`、`docs/TEXAS_HOLDEM_CONTRACT.md`、`docs/reports/P3_05_TEST_EVIDENCE.json`。
+
+### Registry 契約與結果
+
+- `texas_registration(rules)` 與 `register_texas_holdem(registry, rules)`：代碼固定為 `texas_holdem`，人數範圍 2 到 9 與 `game_types` 目錄一致（測試直接解析 migration），規則版本取自規則物件。
+- 重複登記與未知代碼以 `GameError` 回傳、不覆蓋、不回顯輸入；沒有全域 Registry、沒有預設登記或預設規則；應用程式碼只有 `registration.py` 直接建構 `TexasEngine`（靜態檢查），沒有繞過 Registry 的硬編碼。
+- 既有 `GameEngine` 介面未破壞（`settle_hand` 是額外方法，不在六方法內）。
+- 10 項測試；變異驗證（代碼、規則版本、人數範圍、規則型別檢查、引擎使用的規則）全部被抓到。
+- **機制完成，實際登記未完成**：專案沒有啟動組裝處，且正式規則值（盲注、燒牌）尚未核准，所以目前沒有任何地方真正登記。
+
+### Texas Hold'em 完整規則契約
+
+`docs/TEXAS_HOLDEM_CONTRACT.md`：條款表（ID、條款、來源、狀態、測試）。狀態分 SPEC（規格明寫）、APPROVED（專案紀錄中已批准）、CHOSEN（規格未定義的實作選擇，待人工確認）、OPEN（無政策）。
+`test_texas_contract_traceability.py` 解析條款表：編號唯一、狀態合法、每個非 OPEN 條款指向的測試真實存在、OPEN 條款不得宣稱有測試、必要主題（牌組、座位、按鈕、盲注、燒牌、各街、動作、主池邊池、退回、合併、平手與奇數籌碼、名次、亮牌、結算與守恆、套用、Registry）皆有條款。
+**追溯測試只證明測試存在，不證明語意對應；** 複驗抽查約 10 項相關。五項未確認政策各有「既有依據、缺口、候選、程式影響、是否阻擋」的分析（見該文件第三節）。
+
+### 結算的套用、公開與事件流程
+
+1. 牌局結束後（`FINISHED`）：`settle_state` 只計算，不改狀態。
+2. 驅動牌局的伺服器端呼叫 `TexasEngine.settle_hand(state)`（內部 `apply_settlement`）：金額**一律由狀態重新計算，沒有接收外部結算的參數**；每座位 `stack` 加上 `payout`（退回加獲得）、`all_in` 改為「籌碼為 0」；`settled` 為真；狀態版本加一；發出一個**不帶任何明細**的 `HandSettled` 事件。
+3. 第二次呼叫回傳 `already_settled`，直接呼叫 `apply_settlement` 拋 `ValueError`；狀態不變。
+4. 由 `TexasPublic` 強制的不變式：`payout` 之和等於 `pot`；`stack` 等於 `Player.points − committed + payout`；總籌碼等於起始總積分；棄牌座位 `payout` 為 0；未結算時 `payout` 全為 0；未結束的牌局不能標為已結算。
+5. 事件順序：…、`HandEnded`，然後（另一步）`HandSettled`，整手牌序號無缺口。
+6. 公開範圍（現況）：`payout`、`stack`、`settled`（皆可由公開狀態推導，不新增揭露）與亮牌者的底牌；**其餘結算明細不公開（政策 5，OPEN）**。
+
+### 測試與證據
+
+- 新增 33 項：Registry 10、結算套用 14（套用一次、防重複、守恆、事件順序、不一致的結算無法建構、結算後視圖隔離、300 局隨機對局與獨立實作比對）、契約追溯 9。
+- 完整 backend **698 passed、5 skipped**（665＋33；複驗連跑 3 次相同；5 項 skipped 皆為 `TEST_DATABASE_URL` 未設定）。
+- P3-05 registry：exit 0；10 passed in 0.41s
+- P3-05 settlement apply：exit 0；14 passed in 3.02s
+- P3-05 contract traceability：exit 0；9 passed in 0.77s
+- P3-04 settlement：exit 0；22 passed in 9.84s
+- P3-04 seven-card：exit 0；31 passed in 3.50s
+- P3-04-0 blinds：exit 0；13 passed in 0.35s
+- P3-03 texas raising：exit 0；19 passed in 1.48s
+- P3-02 texas engine：exit 0；30 passed in 6.55s
+- P3-01 texas setup：exit 0；60 passed in 0.51s
+- P3-00 extensions：exit 0；21 passed in 0.13s
+- P3-00 deck failure and isolation：exit 0；7 passed in 1.12s
+- P2-F projection：exit 0；15 passed in 0.13s
+- P2-F contract suite：exit 0；31 passed in 0.83s
+- P2-E texas hands：exit 0；55 passed in 3.26s
+- P2-D registry：exit 0；34 passed in 0.15s
+- P2-C engine contract：exit 0；28 passed in 0.16s
+- R2 public field matrix：exit 0；25 passed in 0.11s
+- R1 public isolation：exit 0；19 passed in 0.12s
+- Original P2-B regression：exit 0；124 passed in 2.21s
+- P2-A regression：exit 0；127 passed in 0.22s
+- Phase 1 no-database health：exit 0；3 passed, 1 warning in 0.93s
+- Mypy：exit 0；Success: no issues found in 56 source files
+- Ruff check：exit 0；All checks passed!
+- Ruff format check：exit 0；63 files already formatted
+- Full backend suite：exit 0；698 passed, 5 skipped, 1 warning in 33.06s
+- pip check：exit 0；No broken requirements found.
+
+- 證據檔 `P3_05_TEST_EVIDENCE.json`（來源雜湊、環境、命令、退出碼）；`registration.py` SHA-256 `4aa1183b86d5c7384a892124c6f0ec6f38d96e38aba1d0253fe4fa0592a4e073`；`settlement.py` `576af8be4d3e9b95b9b3ff6eed146ea3cf802a26a1554bd2980a290bad61d911`；`state.py` `24801d4947f5a1e7bc991d8f47496b4418a83473ffc678637b0d76df14d916bc`；契約文件 `e26dc707c75677212150e64a153866e0af05aaa5be1059eab20c69f034673aac`。
+  先前各階段證據未覆寫；舊證據檔的 `git_head: null` 註記仍過時，本檔已改記錄基準 commit `c6ccf86`。
+- 複驗另做、腳本不在 repo、僅記錄結果（`manual_checks_not_in_repository`）：與 `cf78553`、`c6ccf86` 兩個基準各跑 3000 局共 19,024 個狀態，行為軌跡雜湊**完全相同**；
+  3000 局隨機牌局的 `settle_hand` 與第四種結算實作加獨立代理參考逐一一致（含 256 局建局即結束、1264 局有退回、2448 局有邊池、834 局有平手）；
+  反射竄改（投入額、籌碼、`payout`、`settled`、`pot`）皆被拒絕（反射設定 `settled=True` 時回傳 `already_settled`，屬同程序信任限制）；22 種變異全部被抓到（其中 5 種第一次因字串不符沒有實際執行，已用正確字串補跑）。
+
+### P3-03／P3-04 回歸
+
+保留全部既有測試（665 項原樣通過，沒有放寬或刪除）；betting 行為軌跡與兩個基準完全相同；`SeatState`、`TexasPublic`、事件的新欄位皆有預設值，既有建構方式不受影響。
+
+### 複驗結果與本次文件更正
+
+- 獨立性限制：複驗由 P3-05 的作者自己執行，**規則契約的文字與政策判斷仍需人工或不熟悉本案的審查者確認**。
+- 已更正：契約文件來源行號（R2.1、R2.4、R3.1、R5.1、R6.1、R6.2 各差一行；R2.4 的整數來源改為 GAME_RULES l.13；R6.9 的 SECURITY l.19 實為日誌規範，已改註）；R2.4 不再以 PRD 作為「整數」來源；R11.1 改為 DATABASE l.9–10；「不接受外部結算」自 R9.2（CHOSEN）拆出為新條款 R9.8（SPEC，SECURITY l.17）；驗收文件與證據檔已補齊。
+- 【確認】Registry 機制、結算套用與防重複、籌碼守恆、資訊隔離、回歸、階段隔離。【推論】追溯測試與條款的語意對應（抽查）。
+  【無法驗證】結算明細公開、真實的正式登記、API 序列化（沒有 API）、PostgreSQL。
+
+### 保留條件
+
+1. **牌局結束與套用結算分成兩步**：呼叫端漏掉第二步時，`calculate_result` 仍給淨變動，但狀態中的籌碼不更新；通用契約套件不知道這一步，無法強制。Phase 5 整合時必須處理；契約 R9.2 到 R9.6 為 CHOSEN，須人工確認是否改為牌局結束同一步自動套用（會改變既有的最後事件順序與測試）。
+2. `register_texas_holdem` 回傳 `GameError | None`，呼叫端可忽略重複登記錯誤（同 P2-D 條件）。
+3. `SeatState.all_in` 結算後語意為「籌碼為 0」；結算後的籌碼尚未銜接到下一手牌（沒有以本手結果開下一手的輔助）。
+4. 在政策 5 未決下，仍實作了內容為空的 `HandSettled` 標記、`payout` 欄位與兩步結算；皆標為 CHOSEN，可被推翻。
+5. 追溯測試只驗證測試存在；`test_registration_helpers_have_exactly_the_documented_signatures` 的最後一個斷言寫法偏弱。
+6. P3-04 的保留條件（契約政策再確認、窮舉與變異腳本不在 repo、輸入驗證的小缺口等）與 P3-03 的六項保留條件**不因此結案而解除**。
+
+### 需要使用者確認（阻擋的部分已停止）
+
+1. 政策 1、2：燒牌的核准值、盲注數值與設定位置。**阻擋正式組裝（啟動時建立 Registry）。**
+2. 政策 5：結算明細公開範圍（A 維持現況；B 加上各池金額、資格與得主；C 再加上牌型名稱）與公開時機；**阻擋事件內容與池明細公開。**
+3. 政策 4：確認維持「合併相鄰同資格層後再分配」。
+4. 政策 3：籌碼最小單位。
+5. 兩步結算的設計是否符合預期（保留條件 1）。
+
+### P2-A 持續開放事項（仍未完成）
+
+- [ ] reset() 安全亂數失敗後仍能繼續發牌的風險：P3-00 已修補並通過複驗，是否正式標為已解決由人工決定。
+- [ ] test-only Deck 與正式引擎的隔離：僅緩解，仍開放。
+- [ ] Python frozen dataclass／同程序任意 Python 程式碼的信任限制：仍開放。
+- [ ] 完整回歸證據與程式版本的歷史追溯缺口：仍開放。
+
+### 尚未驗收（P3-05 通過不代表已完成）
+
+- Room、GameSession、認證與授權、傳輸層、完整多人連線流程、前端遊戲操作流程。
+- 正式組裝與實際登記（需要核准的規則值）；結算明細的公開；PostgreSQL 測試（5 項 skipped）。
+
+---
+
 ## P3-04 正式結案決議 — CONDITIONAL PASS（僅文件更新）
 
 人工驗收決議：P3-04 = **CONDITIONAL PASS**，核准 **P3-04 階段**（七選五、攤牌亮牌、邊池結算與結果，含 P3-04-0 測試補強）結案。
