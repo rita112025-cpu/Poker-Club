@@ -75,6 +75,10 @@ def build_router(settings: Settings) -> APIRouter:
             raise HTTPException(status_code=409, detail=_problem(member))
         return {"room": table.code, "player_id": str(member.player_id), "token": member.token}
 
+    @router.get("/status")
+    def prototype_status() -> dict[str, bool]:
+        return {"available": True}
+
     @router.post("/rooms")
     def create_room(body: NicknameBody) -> dict[str, str]:
         if len(hub.rooms) >= MAX_ROOMS:

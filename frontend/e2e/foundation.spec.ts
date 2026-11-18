@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 test('繁中首頁透過真實 API 檢查連線，無水平溢出', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/好牌，好朋友。\s*相聚同一桌。/)
-  await expect(page.getByText('目前尚未開放登入、建立房間及遊戲。')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '遊戲大廳' })).toBeVisible()
   await page.getByRole('button', { name: '檢查 API 連線' }).click()
   await expect(page.getByRole('status')).toContainText('API 連線正常')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)

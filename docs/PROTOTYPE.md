@@ -18,7 +18,7 @@ cd backend
 PROTOTYPE_ENABLED=true ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-前端：`cd frontend && npm run dev`，開啟 <http://127.0.0.1:5173>，按「開始試玩（原型）」。
+前端：`cd frontend && npm run dev`，開啟 <http://127.0.0.1:5173>，按「瀏覽遊戲」，在德州撲克卡片按「建立或加入房間」。
 一人建立房間並把五碼房間代碼給朋友；房主按「開始牌局」，每手結束後按「下一手」。
 
 ## 結構

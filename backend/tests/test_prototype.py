@@ -58,6 +58,12 @@ def broadcast(sockets: list[WebSocketTestSession]) -> list[dict[str, Any]]:
     return views
 
 
+def test_prototype_status_returns_availability(client: TestClient) -> None:
+    response = client.get("/api/proto/status")
+    assert response.status_code == 200
+    assert response.json() == {"available": True}
+
+
 def test_rooms_have_unique_nicknames_and_a_host(client: TestClient) -> None:
     room, seats = make_room(client, ("Ann", "Bob"))
     again = client.post(f"/api/proto/rooms/{room}/join", json={"nickname": "Ann"})
