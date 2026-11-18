@@ -61,19 +61,19 @@ function errorMessage(code: string, fallback: string): string {
 }
 
 function CardFace({ code }: { code: string | null }) {
-  if (code === null) return <span className="card card-down" aria-label="暗牌" />
+  if (code === null) return <span className="card card-down" role="img" aria-label="暗牌" />
   const suit = code.slice(-1)
   const rank = code.slice(0, -1)
   const symbol: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' }
   const red = suit === 'H' || suit === 'D'
   return (
-    <span className={`card ${red ? 'card-red' : 'card-black'}`} aria-label={`${rank}${symbol[suit] ?? suit}`}>
+    <span className={`card ${red ? 'card-red' : 'card-black'}`} role="img" aria-label={`${rank}${symbol[suit] ?? suit}`}>
       {rank}{symbol[suit] ?? suit}
     </span>
   )
 }
 
-function Lobby({ onJoined }: { onJoined: (session: Session) => void }) {
+function RoomEntry({ onJoined, onBack }: { onJoined: (session: Session) => void; onBack: () => void }) {
   const [nickname, setNickname] = useState('')
   const [code, setCode] = useState('')
   const [message, setMessage] = useState('')
@@ -111,24 +111,27 @@ function Lobby({ onJoined }: { onJoined: (session: Session) => void }) {
 
   const ready = nickname.trim().length > 0 && !busy
   return (
-    <section className="mx-auto max-w-md space-y-5 rounded-xl border border-white/10 bg-black/20 p-6">
-      <h2 className="text-xl font-medium text-amber-100">德州撲克（原型）</h2>
-      <label className="block text-sm text-stone-300">暱稱
-        <input className="mt-1 w-full rounded-md border border-white/20 bg-transparent px-3 py-2"
+    <section className="mx-auto max-w-md space-y-5 rounded-xl border border-club-line bg-club-surface p-6">
+      <button type="button" className="settings-trigger" disabled={busy} onClick={onBack}>返回遊戲大廳</button>
+      <h2 className="text-xl font-medium text-club-accent">德州撲克（原型）</h2>
+      <label className="block text-sm text-club-muted">暱稱
+        <input className="mt-1 w-full rounded-md border border-club-line bg-transparent px-3 py-2"
           aria-label="暱稱" value={nickname} maxLength={16} onChange={(event) => { setNickname(event.target.value) }} />
       </label>
-      <button className="w-full rounded-md border border-amber-200/60 px-4 py-2 text-amber-100 disabled:opacity-40"
+      <button className="w-full rounded-md border border-club-accent px-4 py-2 text-club-accent disabled:opacity-40"
         disabled={!ready} onClick={() => { void enter('/api/proto/rooms') }}>建立房間</button>
       <div className="flex gap-2">
-        <input className="min-w-0 flex-1 rounded-md border border-white/20 bg-transparent px-3 py-2 uppercase"
+        <input className="min-w-0 flex-1 rounded-md border border-club-line bg-transparent px-3 py-2 uppercase"
           placeholder="房間代碼" aria-label="房間代碼" value={code} maxLength={5}
           onChange={(event) => { setCode(event.target.value.toUpperCase()) }} />
-        <button className="rounded-md border border-white/30 px-4 py-2 disabled:opacity-40"
+        <button className="rounded-md border border-club-line px-4 py-2 disabled:opacity-40"
           disabled={!ready || code.length !== 5}
           onClick={() => { void enter(`/api/proto/rooms/${code}/join`) }}>加入</button>
       </div>
-      <p role="status" className="min-h-6 text-sm text-red-300">{message}</p>
-      <p className="text-xs leading-6 text-stone-500">原型：盲注 5／10、每人 1000 積分，僅供好友試玩，積分無現金價值。牌局只存在伺服器記憶體中。</p>
+      <p role="status" className={`min-h-6 text-sm ${busy ? 'text-club-muted' : 'text-club-error'}`}>
+        {busy ? '房間請求處理中，請稍候…' : message}
+      </p>
+      <p className="text-xs leading-6 text-club-muted">原型：盲注 5／10、每人 1000 積分，僅供好友試玩，積分無現金價值。牌局只存在伺服器記憶體中。</p>
     </section>
   )
 }
@@ -145,22 +148,22 @@ function Controls({ game, send }: { game: GameView; send: (message: object) => v
     send({ type: 'action', action: kind, amount: value ?? null, state_version: game.state_version })
   }
   return (
-    <div className="space-y-3 rounded-lg border border-amber-200/30 p-4">
-      <p className="text-sm text-amber-100">輪到你了{legal.to_call > 0 ? `・需跟注 ${legal.to_call}` : ''}</p>
+    <div className="space-y-3 rounded-lg border border-club-line p-4">
+      <p className="text-sm text-club-accent">輪到你了{legal.to_call > 0 ? `・需跟注 ${legal.to_call}` : ''}</p>
       <div className="flex flex-wrap gap-2">
         {legal.kinds.filter((kind) => kind !== 'bet' && kind !== 'raise').map((kind) => (
-          <button key={kind} className="rounded-md border border-white/30 px-4 py-2 hover:bg-white/10"
+          <button key={kind} className="rounded-md border border-club-line px-4 py-2 hover:bg-club-hover"
             onClick={() => { act(kind) }}>{ACTION_LABEL[kind] ?? kind}</button>
         ))}
       </div>
       {sizing !== null && (
         <div className="flex flex-wrap items-center gap-3">
-          <input type="range" min={low} max={high} value={chosen} aria-label="金額"
+          <input type="range" className="w-full max-w-40" min={low} max={high} value={chosen} aria-label="金額"
             onChange={(event) => { setAmount(Number(event.target.value)) }} />
           <input type="number" min={low} max={high} value={chosen} aria-label="金額數字"
-            className="w-24 rounded-md border border-white/20 bg-transparent px-2 py-1"
+            className="w-24 rounded-md border border-club-line bg-transparent px-2 py-1"
             onChange={(event) => { setAmount(Number(event.target.value)) }} />
-          <button className="rounded-md border border-amber-200/60 px-4 py-2 text-amber-100"
+          <button className="rounded-md border border-club-accent px-4 py-2 text-club-accent"
             onClick={() => { act(sizing, chosen) }}>{ACTION_LABEL[sizing]}到 {chosen}</button>
         </div>
       )}
@@ -175,13 +178,13 @@ function Table({ view, send }: { view: View; send: (message: object) => void }) 
   const names = new Map(view.members.map((member) => [member.id, member.nickname]))
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-300">
-        <span>房間代碼 <strong className="tracking-widest text-amber-200">{view.room}</strong>（分享給朋友）</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-club-muted">
+        <span>房間代碼 <strong className="tracking-widest text-club-accent">{view.room}</strong>（分享給朋友）</span>
         <span>盲注 {view.blinds[0]}／{view.blinds[1]}・第 {view.hand_no} 手</span>
       </div>
 
       {game === null && (
-        <ul className="space-y-1 text-stone-300">
+        <ul className="space-y-1 text-club-muted">
           {view.members.map((member) => (
             <li key={member.id}>{member.nickname}{member.host ? '（房主）' : ''}・{member.stack} 積分
               {member.connected ? '' : '・離線'}</li>
@@ -190,25 +193,28 @@ function Table({ view, send }: { view: View; send: (message: object) => void }) 
       )}
 
       {game !== null && (
-        <div className="space-y-5 rounded-2xl border border-emerald-900 bg-emerald-950/60 p-5">
-          <p className="text-center text-sm text-emerald-100">
+        <div className="live-table space-y-5 rounded-2xl border p-3 sm:p-5">
+          <p className="table-status text-center text-sm text-club-accent" aria-live="polite">
+            <span className="preview-chip" aria-hidden="true" />
             {STREETS[game.street] ?? game.street}・底池 {game.pot}
             {game.over ? '・本手結束' : game.turn === view.you ? '・輪到你' : `・等待 ${names.get(game.turn ?? '') ?? ''}`}
           </p>
-          <div className="flex min-h-16 justify-center gap-2" aria-label="公共牌">
+          <div className="community-cards flex min-h-16 justify-center gap-1 sm:gap-2" role="group" aria-label="公共牌">
             {game.board.map((code) => <CardFace key={code} code={code} />)}
           </div>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="table-seats grid gap-3">
             {game.seats.map((seat) => {
               const mine = seat.player_id === view.you
               return (
                 <li key={seat.player_id}
-                  className={`rounded-lg border p-3 ${game.turn === seat.player_id ? 'border-amber-300' : 'border-white/10'} ${seat.folded ? 'opacity-50' : ''}`}>
-                  <p className="text-sm text-stone-100">
+                  className="table-seat min-w-0 rounded-lg border p-3"
+                  data-active={game.turn === seat.player_id}>
+                  <p className="break-words text-sm text-club-ink">
+                    <span className="seat-avatar" aria-hidden="true">♠</span>
                     {seat.nickname}{mine ? '（你）' : ''}
                     {seat.button ? ' ・莊' : ''}{seat.small_blind ? ' ・小盲' : ''}{seat.big_blind ? ' ・大盲' : ''}
                   </p>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-xs text-club-muted">
                     籌碼 {seat.stack}・本輪下注 {seat.street_committed}
                     {seat.folded ? '・已棄牌' : ''}{seat.all_in ? '・全下' : ''}
                     {game.settled && seat.payout > 0 ? `・贏得 ${seat.payout}` : ''}
@@ -224,7 +230,7 @@ function Table({ view, send }: { view: View; send: (message: object) => void }) 
           </ul>
           <Controls key={game.state_version} game={game} send={send} />
           {game.over && view.summary.length > 0 && (
-            <ul className="text-sm text-amber-100" aria-label="本手結果">
+            <ul className="text-sm text-club-accent" aria-label="本手結果">
               {view.summary.map((entry) => (
                 <li key={entry.nickname}>{entry.nickname}：{entry.net >= 0 ? '+' : ''}{entry.net}（現有 {entry.stack}）</li>
               ))}
@@ -234,11 +240,11 @@ function Table({ view, send }: { view: View; send: (message: object) => void }) 
       )}
 
       {canStart && (
-        <button className="rounded-md border border-amber-200/60 px-6 py-3 text-amber-100"
+        <button className="rounded-md border border-club-accent px-6 py-3 text-club-accent"
           onClick={() => { send({ type: 'start' }) }}>{game === null ? '開始牌局' : '下一手'}</button>
       )}
-      {!view.is_host && (game === null || game.over) && <p className="text-sm text-stone-400">等待房主開始下一手…</p>}
-      {view.is_host && active < 2 && game?.over === true && <p className="text-sm text-stone-400">只剩一位玩家有籌碼，遊戲結束。</p>}
+      {!view.is_host && (game === null || game.over) && <p className="text-sm text-club-muted">等待房主開始下一手…</p>}
+      {view.is_host && active < 2 && game?.over === true && <p className="text-sm text-club-muted">只剩一位玩家有籌碼，遊戲結束。</p>}
     </div>
   )
 }
@@ -284,18 +290,18 @@ export function Game({ onLeave }: { onLeave: () => void }) {
   }
 
   if (session === null) {
-    return <Lobby onJoined={(next) => { saveSession(next); setStatus('connecting'); setSession(next) }} />
+    return <RoomEntry onBack={onLeave} onJoined={(next) => { saveSession(next); setStatus('connecting'); setSession(next) }} />
   }
   return (
     <section className="space-y-4">
       {status === 'closed' && (
-        <p role="alert" className="text-sm text-red-300">連線中斷。
+        <p role="alert" className="text-sm text-club-error">連線中斷。
           <button className="ml-2 underline" onClick={() => { setStatus('connecting'); setAttempt((n) => n + 1) }}>重新連線</button>
         </p>
       )}
-      <p role="status" aria-live="polite" className="min-h-6 text-sm text-red-300">{notice}</p>
-      {view === null ? <p className="text-stone-400">連線中…</p> : <Table view={view} send={send} />}
-      <button className="text-xs text-stone-500 underline" onClick={leave}>離開房間</button>
+      <p role="status" aria-live="polite" className="min-h-6 text-sm text-club-error">{notice}</p>
+      {view === null ? <p className="text-club-muted">連線中…</p> : <Table view={view} send={send} />}
+      <button className="text-xs text-club-muted underline" onClick={leave}>離開房間</button>
     </section>
   )
 }
