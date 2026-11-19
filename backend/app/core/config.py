@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # idempotency, so it is off unless PROTOTYPE_ENABLED=true. The rule values below are
     # prototype settings, NOT approved product policy (blinds, starting points, burning).
     prototype_enabled: bool = False
+    big_two_prototype_enabled: bool = False
     prototype_small_blind: int = 5
     prototype_big_blind: int = 10
     prototype_starting_points: int = 1000

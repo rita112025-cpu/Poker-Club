@@ -16,6 +16,8 @@ const games = [
     cards: ['9♣', '9♥', '9♠'] },
 ]
 
+export type PlayableGame = 'texas' | 'big-two'
+
 type Availability = 'checking' | 'available' | 'disabled' | 'unreachable'
 
 const availabilityText: Record<Availability, string> = {
@@ -25,7 +27,7 @@ const availabilityText: Record<Availability, string> = {
   unreachable: '無法確認試玩狀態',
 }
 
-export function ClubLobby({ onPlay }: { onPlay: () => void }) {
+function useAvailability(path: string) {
   const [availability, setAvailability] = useState<Availability>('checking')
   const [attempt, setAttempt] = useState(0)
 
@@ -35,7 +37,7 @@ export function ClubLobby({ onPlay }: { onPlay: () => void }) {
     const timeout = window.setTimeout(() => { request.abort() }, 5000)
     async function check() {
       try {
-        const response = await fetch('/api/proto/status', { signal: request.signal, cache: 'no-store' })
+        const response = await fetch(path, { signal: request.signal, cache: 'no-store' })
         if (!active) return
         if (response.status === 404) {
           setAvailability('disabled')
@@ -59,49 +61,63 @@ export function ClubLobby({ onPlay }: { onPlay: () => void }) {
       window.clearTimeout(timeout)
       request.abort()
     }
-  }, [attempt])
+  }, [attempt, path])
+
+  return { availability, retry: () => {
+    setAvailability('checking')
+    setAttempt((previous) => previous + 1)
+  } }
+}
+
+export function ClubLobby({ onPlay }: { onPlay: (game: PlayableGame) => void }) {
+  const texas = useAvailability('/api/proto/status')
+  const bigTwo = useAvailability('/api/proto/big-two/status')
 
   return (
     <section id="game-lobby" className="game-lobby" aria-labelledby="lobby-heading">
       <div className="lobby-heading">
         <h2 id="lobby-heading">遊戲大廳</h2>
-        <p>選擇遊戲，或用房間代碼加入朋友的德州牌桌。</p>
+        <p>選擇遊戲，或用房間代碼加入朋友的牌桌。</p>
       </div>
       <div className="lobby-grid">
-        {games.map((game) => (
-          <article key={game.id} className="lobby-card" aria-labelledby={`game-${game.id}`}>
-            <div className={`lobby-preview lobby-preview-${game.id}`} aria-hidden="true">
-              <div className="lobby-preview-felt" />
-              <div className="lobby-preview-hand">
-                {game.cards.map((card) => (
-                  <span key={card} className={`card ${/[♥♦]/u.test(card) ? 'card-red' : 'card-black'}`}>{card}</span>
-                ))}
-                {game.id === 'draw' && <span className="card card-down" />}
+        {games.map((game) => {
+          const playable = game.id === 'texas' || game.id === 'big-two' ? game.id : null
+          const status = playable === 'texas' ? texas : playable === 'big-two' ? bigTwo : null
+          const available = status?.availability === 'available'
+          return (
+            <article key={game.id} className="lobby-card" aria-labelledby={`game-${game.id}`}>
+              <div className={`lobby-preview lobby-preview-${game.id}`} aria-hidden="true">
+                <div className="lobby-preview-felt" />
+                <div className="lobby-preview-hand">
+                  {game.cards.map((card) => (
+                    <span key={card} className={`card ${/[♥♦]/u.test(card) ? 'card-red' : 'card-black'}`}>{card}</span>
+                  ))}
+                  {game.id === 'draw' && <span className="card card-down" />}
+                </div>
               </div>
-            </div>
-            <div className="lobby-card-body">
-              <div className="lobby-card-heading">
-                <h3 id={`game-${game.id}`}>{game.name}</h3>
-                <span className="lobby-badge" data-available={game.id === 'texas' && availability === 'available'}
-                  aria-live={game.id === 'texas' ? 'polite' : undefined}>
-                  {game.id === 'texas' ? availabilityText[availability] : '開發中'}
-                </span>
+              <div className="lobby-card-body">
+                <div className="lobby-card-heading">
+                  <h3 id={`game-${game.id}`}>{game.name}</h3>
+                  <span className="lobby-badge" data-available={available} aria-live={status ? 'polite' : undefined}>
+                    {status && (game.id === 'texas' || status.availability !== 'disabled')
+                      ? availabilityText[status.availability] : '開發中'}
+                  </span>
+                </div>
+                <p className="lobby-meta" lang="en">{game.english}</p>
+                <p className="lobby-rules">{game.rules}</p>
+                <p className="lobby-players">{game.id === 'big-two' && available ? '4 人' : game.players}</p>
+                {available && playable && (
+                  <button className="settings-trigger lobby-entry" type="button"
+                    onClick={() => { onPlay(playable) }}>建立或加入房間</button>
+                )}
+                {(status?.availability === 'unreachable' ||
+                  (game.id === 'texas' && status?.availability === 'disabled')) && (
+                  <button className="settings-trigger" type="button" onClick={status.retry}>重新確認試玩狀態</button>
+                )}
               </div>
-              <p className="lobby-meta" lang="en">{game.english}</p>
-              <p className="lobby-rules">{game.rules}</p>
-              <p className="lobby-players">{game.players}</p>
-              {game.id === 'texas' && availability === 'available' && (
-                <button className="settings-trigger lobby-entry" type="button" onClick={onPlay}>建立或加入房間</button>
-              )}
-              {game.id === 'texas' && (availability === 'unreachable' || availability === 'disabled') && (
-                <button className="settings-trigger" type="button" onClick={() => {
-                  setAvailability('checking')
-                  setAttempt((previous) => previous + 1)
-                }}>重新確認試玩狀態</button>
-              )}
-            </div>
-          </article>
-        ))}
+            </article>
+          )
+        })}
       </div>
     </section>
   )
