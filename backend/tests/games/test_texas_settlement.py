@@ -261,7 +261,7 @@ def rigged(seats: list[int], button: int, hands: dict[int, str], board: str) -> 
 
 def play_out(engine: TexasEngine, state: GameState) -> GameState:
     """Everyone checks or calls until the hand ends."""
-    from test_texas_engine import legal_actions
+    from app.games.texas_holdem import legal_actions
 
     while state.public.status is GameStatus.IN_PROGRESS:
         legal = legal_actions(state)
@@ -384,7 +384,9 @@ def test_settling_an_unfinished_hand_or_a_foreign_state_is_refused() -> None:
 
 def test_random_hands_settle_exactly_as_the_independent_implementations_do() -> None:
     from seven_card_reference_independent import evaluate7
-    from test_texas_engine import legal_actions, pick_move
+    from test_texas_engine import pick_move
+
+    from app.games.texas_holdem import legal_actions
 
     codes = [
         r + s

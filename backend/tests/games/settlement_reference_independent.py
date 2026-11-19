@@ -5,8 +5,10 @@ arise in a real hand (a folded seat holding the largest commitment) differs on p
 the tests only feed it reachable inputs.
 """
 
+from typing import Any
 
-def settle(committed, folded, strength, button):
+
+def settle(committed: Any, folded: Any, strength: Any, button: Any) -> dict[Any, int]:
     seats = list(committed)
     live = [s for s in seats if s not in folded]
     if not live:
@@ -25,7 +27,7 @@ def settle(committed, folded, strength, button):
 
     # 2. layers
     levels = sorted({v for v in c.values() if v > 0})
-    layers = []  # [amount, frozenset eligible]
+    layers: list[Any] = []  # [amount, frozenset eligible]
     prev = 0
     for lv in levels:
         amount = sum(min(v, lv) - min(v, prev) for v in c.values())
@@ -35,7 +37,7 @@ def settle(committed, folded, strength, button):
 
     # layers with nobody eligible (only possible if a folded seat out-committed
     # every live seat): fold their chips into the pot below; if none, the pot above.
-    pots = []
+    pots: list[Any] = []
     orphan = 0
     for amount, elig in layers:
         if not elig:
