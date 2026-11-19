@@ -254,3 +254,21 @@ MATRICES[BigTwoPublic] = FieldMatrix(
 
 def test_big_two_public_field_matrix() -> None:
     check_field_matrix(BigTwoPublic, MATRICES[BigTwoPublic])
+
+
+def test_deal_refuses_wrong_player_sets_and_unknown_rules() -> None:
+    engine = BigTwoEngine()
+    deck = Deck.for_testing(tuple(Card(rank, suit) for rank in RANKS for suit in SUITS))
+    four = players()
+    duplicate_seat = (*four[:3], Player(UUID(int=9), "Player 9", 0))
+    duplicate_id = (*four[:3], Player(four[0].id, "Player 9", 3))
+    for group in (
+        four[:3],
+        (*four, Player(UUID(int=5), "Player 5", 4)),
+        duplicate_seat,
+        duplicate_id,
+    ):
+        refused = engine._deal(CONFIG, UUID(int=99), group, deck)
+        assert isinstance(refused, GameError) and refused.code == "invalid_players", group
+    unknown = engine._deal(replace(CONFIG, rules_version="other"), UUID(int=99), four, deck)
+    assert isinstance(unknown, GameError) and unknown.code == "rules_mismatch"

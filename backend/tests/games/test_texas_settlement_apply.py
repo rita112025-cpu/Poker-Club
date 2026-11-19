@@ -92,9 +92,13 @@ def test_only_a_finished_texas_hand_can_be_settled() -> None:
     assert isinstance(early, GameError) and early.code == "not_finished"
     with pytest.raises(ValueError, match="not finished"):
         apply_settlement(running)
-    from test_texas_engine import GameConfig  # noqa: F401  (re-export used below)
-
-    from app.games.core import Player, PrivateGameData, PublicGameData, Turn
+    from app.games.core import (
+        GameConfig,  # noqa: F401
+        Player,
+        PrivateGameData,
+        PublicGameData,
+        Turn,
+    )
 
     pair = (Player(pid(0), "a", 0), Player(pid(1), "b", 1))
     plain = GameState(
@@ -221,7 +225,7 @@ def test_a_whole_hand_has_one_gapless_event_sequence_ending_with_the_settlement(
     deck = rigged([0, 1, 2], 0, {0: "AS AH", 1: "KS KH", 2: "QS QH"}, "2C 7D 9H JC 3S")
     engine, state = new_hand({0: 100, 1: 100, 2: 100}, 0, RULES, deck)
     seen: list[tuple[int, str]] = []
-    from test_texas_engine import legal_actions as legal
+    from app.games.texas_holdem import legal_actions as legal
 
     while state.public.status is GameStatus.IN_PROGRESS:
         options = legal(state)
@@ -249,8 +253,9 @@ def test_a_whole_hand_has_one_gapless_event_sequence_ending_with_the_settlement(
 
 
 def test_random_hands_conserve_chips_and_match_the_independent_settlement() -> None:
-    from test_texas_engine import legal_actions as legal
     from test_texas_engine import pick_move
+
+    from app.games.texas_holdem import legal_actions as legal
 
     codes = [
         r + s
