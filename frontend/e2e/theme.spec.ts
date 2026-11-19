@@ -9,7 +9,7 @@ async function openAppearance(page: Page) {
 
 async function enterPrototype(page: Page, nickname: string) {
   await page.goto('/')
-  await page.getByRole('button', { name: '建立或加入房間' }).click()
+  await page.getByRole('article', { name: '德州撲克', exact: true }).getByRole('button', { name: '建立或加入房間' }).click()
   await page.getByRole('textbox', { name: '暱稱' }).fill(nickname)
 }
 

@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { ThemeProvider } from './theme/ThemeProvider'
 import { Game } from './Game'
-import { ClubLobby } from './lobby/ClubLobby'
+import { BigTwoGame } from './games/big_two/BigTwoGame'
+import { ClubLobby, type PlayableGame } from './lobby/ClubLobby'
 
 type Health = 'idle' | 'checking' | 'online' | 'offline'
 
@@ -11,7 +12,7 @@ export function App() {
 
 function Club({ settings }: { settings: ReactNode }) {
   const [health, setHealth] = useState<Health>('idle')
-  const [playing, setPlaying] = useState(false)
+  const [playing, setPlaying] = useState<PlayableGame | null>(null)
 
   async function checkConnection() {
     setHealth('checking')
@@ -38,7 +39,10 @@ function Club({ settings }: { settings: ReactNode }) {
         <a className="brand" href="/" aria-label="Poker Club 首頁">♠ <span>POKER CLUB</span></a>
         {settings}
       </header>
-      {playing && <main className="mx-auto max-w-6xl py-10"><Game onLeave={() => { setPlaying(false) }} /></main>}
+      {playing && <main className="mx-auto max-w-6xl py-10">
+        {playing === 'texas' ? <Game onLeave={() => { setPlaying(null) }} /> :
+          <BigTwoGame onLeave={() => { setPlaying(null) }} />}
+      </main>}
       {!playing && <main className="mx-auto max-w-6xl">
         <div className="grid gap-12 py-16 lg:grid-cols-2 lg:items-center lg:py-20">
           <section>
@@ -64,7 +68,7 @@ function Club({ settings }: { settings: ReactNode }) {
             <p className="mt-5 text-center text-xs tracking-widest text-club-muted">牌桌視覺示意・非進行中的牌局</p>
           </div>
         </div>
-        <ClubLobby onPlay={() => { setPlaying(true); window.scrollTo(0, 0) }} />
+        <ClubLobby onPlay={(game) => { setPlaying(game); window.scrollTo(0, 0) }} />
       </main>}
       <footer className="mx-auto max-w-6xl border-t border-club-line pt-6 text-xs leading-6 text-club-muted">POKER CLUB · 僅供休閒娛樂 · 不提供現金下注、兌換或交易</footer>
     </div>

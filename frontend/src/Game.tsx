@@ -60,7 +60,7 @@ function errorMessage(code: string, fallback: string): string {
   return ERROR_TEXT[code] ?? fallback
 }
 
-function CardFace({ code }: { code: string | null }) {
+export function CardFace({ code }: { code: string | null }) {
   if (code === null) return <span className="card card-down" role="img" aria-label="暗牌" />
   const suit = code.slice(-1)
   const rank = code.slice(0, -1)
@@ -73,7 +73,12 @@ function CardFace({ code }: { code: string | null }) {
   )
 }
 
-function RoomEntry({ onJoined, onBack }: { onJoined: (session: Session) => void; onBack: () => void }) {
+export function RoomEntry({ onJoined, onBack, bigTwo = false }: {
+  onJoined: (session: Session) => void
+  onBack: () => void
+  bigTwo?: boolean
+}) {
+  const roomPath = bigTwo ? '/api/proto/big-two/rooms' : '/api/proto/rooms'
   const [nickname, setNickname] = useState('')
   const [code, setCode] = useState('')
   const [message, setMessage] = useState('')
@@ -94,7 +99,7 @@ function RoomEntry({ onJoined, onBack }: { onJoined: (session: Session) => void;
           typeof detail.code === 'string' && typeof detail.message === 'string') {
           setMessage(errorMessage(detail.code, detail.message))
         } else {
-          setMessage(response.status === 404 ? '找不到這個房間' : '無法加入，請稍後再試')
+          setMessage(bigTwo && typeof detail === 'string' ? detail : response.status === 404 ? '找不到這個房間' : '無法加入，請稍後再試')
         }
         return
       }
@@ -103,7 +108,8 @@ function RoomEntry({ onJoined, onBack }: { onJoined: (session: Session) => void;
         onJoined({ room: body.room, token: body.token })
       }
     } catch {
-      setMessage('無法連線至伺服器（後端需設定 PROTOTYPE_ENABLED=true）')
+      setMessage(bigTwo ? '無法連線至大老二試玩服務。' :
+        '無法連線至伺服器（後端需設定 PROTOTYPE_ENABLED=true）')
     } finally {
       setBusy(false)
     }
@@ -113,25 +119,28 @@ function RoomEntry({ onJoined, onBack }: { onJoined: (session: Session) => void;
   return (
     <section className="mx-auto max-w-md space-y-5 rounded-xl border border-club-line bg-club-surface p-6">
       <button type="button" className="settings-trigger" disabled={busy} onClick={onBack}>返回遊戲大廳</button>
-      <h2 className="text-xl font-medium text-club-accent">德州撲克（原型）</h2>
+      <h2 className="text-xl font-medium text-club-accent">{bigTwo ? '大老二（原型）' : '德州撲克（原型）'}</h2>
       <label className="block text-sm text-club-muted">暱稱
         <input className="mt-1 w-full rounded-md border border-club-line bg-transparent px-3 py-2"
           aria-label="暱稱" value={nickname} maxLength={16} onChange={(event) => { setNickname(event.target.value) }} />
       </label>
       <button className="w-full rounded-md border border-club-accent px-4 py-2 text-club-accent disabled:opacity-40"
-        disabled={!ready} onClick={() => { void enter('/api/proto/rooms') }}>建立房間</button>
+        disabled={!ready} onClick={() => { void enter(roomPath) }}>建立房間</button>
       <div className="flex gap-2">
         <input className="min-w-0 flex-1 rounded-md border border-club-line bg-transparent px-3 py-2 uppercase"
           placeholder="房間代碼" aria-label="房間代碼" value={code} maxLength={5}
           onChange={(event) => { setCode(event.target.value.toUpperCase()) }} />
         <button className="rounded-md border border-club-line px-4 py-2 disabled:opacity-40"
           disabled={!ready || code.length !== 5}
-          onClick={() => { void enter(`/api/proto/rooms/${code}/join`) }}>加入</button>
+          onClick={() => { void enter(`${roomPath}/${code}/join`) }}>加入</button>
       </div>
       <p role="status" className={`min-h-6 text-sm ${busy ? 'text-club-muted' : 'text-club-error'}`}>
         {busy ? '房間請求處理中，請稍候…' : message}
       </p>
-      <p className="text-xs leading-6 text-club-muted">原型：盲注 5／10、每人 1000 積分，僅供好友試玩，積分無現金價值。牌局只存在伺服器記憶體中。</p>
+      <p className="text-xs leading-6 text-club-muted">
+        {bigTwo ? '四人私人試玩，牌局和積分只保存在房間內。' :
+          '原型：盲注 5／10、每人 1000 積分，僅供好友試玩，積分無現金價值。牌局只存在伺服器記憶體中。'}
+      </p>
     </section>
   )
 }

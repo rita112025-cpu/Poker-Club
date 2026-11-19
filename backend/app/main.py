@@ -14,6 +14,11 @@ if get_settings().prototype_enabled:
     from app.prototype.routes import build_router
 
     app.include_router(build_router(get_settings()))
+if get_settings().big_two_prototype_enabled:
+    from app.prototype.big_two import build_big_two_router
+
+    app.include_router(build_big_two_router())
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,

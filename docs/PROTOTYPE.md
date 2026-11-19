@@ -40,3 +40,11 @@ PROTOTYPE_ENABLED=true ../.venv/Scripts/python.exe -m uvicorn app.main:app --hos
 - 不處理逾時：有人離開，牌局會停在他的回合。
 - 玩家只有在兩手之間才能加入；籌碼為 0 的玩家留在名單但不再入局。
 - 一人籌碼耗盡後只剩一人時遊戲結束，沒有重新開始或補籌碼。
+
+## 大老二私人試玩
+
+於後端設定 `BIG_TWO_PROTOTYPE_ENABLED=true`，再依上方方式啟動服務。大廳的大老二卡片會顯示私人試玩入口。每桌需四位玩家都在線，再由房主開局。房間內的有號積分從零起算，可跨局累計。關閉或回收房間會清除該帳本。
+
+大老二使用 `/api/proto/big-two` 下的狀態、建立、加入與 WebSocket 路徑。斷線保留原席位；離開後，從同一瀏覽器分頁再次進入大老二可嘗試恢復。全員連續離線滿 30 分鐘回收房間。每位成員、每局的最近 256 份動作回執只在房間及程序存活時保留。私人原型限受信任玩家使用。
+
+完整前端回歸可從 `frontend/` 執行 `PROTOTYPE_ENABLED=true BIG_TWO_PROTOTYPE_ENABLED=true npm run test:e2e`。兩個設定均關閉時，可驗證大廳的停用狀態。

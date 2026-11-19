@@ -4,7 +4,9 @@ test('the catalog shows four games and only links to the enabled prototype', asy
   await page.goto('/')
   const lobby = page.getByRole('region', { name: '遊戲大廳' })
   await expect(lobby.getByRole('article')).toHaveCount(4)
-  for (const name of ['大老二', '十三支', '五張抽牌']) {
+  const planned = ['十三支', '五張抽牌']
+  if (process.env.BIG_TWO_PROTOTYPE_ENABLED !== 'true') planned.push('大老二')
+  for (const name of planned) {
     const card = lobby.getByRole('article', { name, exact: true })
     await expect(card.getByText('開發中')).toBeVisible()
     await expect(card.getByRole('button').or(card.getByRole('link'))).toHaveCount(0)
@@ -116,7 +118,7 @@ for (const action of ['建立房間', '加入'] as const) {
 
     try {
       await page.goto('/')
-      await page.getByRole('button', { name: '建立或加入房間' }).click()
+      await page.getByRole('article', { name: '德州撲克', exact: true }).getByRole('button', { name: '建立或加入房間' }).click()
       await page.getByRole('textbox', { name: '暱稱' }).fill('等待測試')
       if (!create) await page.getByRole('textbox', { name: '房間代碼' }).fill(room)
       await page.getByRole('button', { name: action, exact: true }).click()

@@ -1,0 +1,8 @@
+@keyframes big-two-play {
+  from { opacity: 0.3; transform: translateY(0.25rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.big-two-play {
+  animation: big-two-play var(--motion-duration) ease-out both;
+}
