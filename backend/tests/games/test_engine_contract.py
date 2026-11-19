@@ -170,7 +170,7 @@ def test_stub_satisfies_protocol_statically() -> None:
         lambda: GameConfig("g", TextWithSecret("1")),
         lambda: GameConfig("g", " "),
         lambda: GameEvent(IntWithSecret(0), "e", EventVisibility.PUBLIC),
-        lambda: GameEvent(True, "e", EventVisibility.PUBLIC),  # type: ignore[arg-type]
+        lambda: GameEvent(True, "e", EventVisibility.PUBLIC),
         lambda: GameEvent(0, TextWithSecret("e"), EventVisibility.PUBLIC),
         lambda: GameEvent(0, "e", cast(EventVisibility, "public")),
         lambda: GameEvent(0, "e", EventVisibility.PUBLIC, ALICE),
@@ -179,7 +179,7 @@ def test_stub_satisfies_protocol_statically() -> None:
         lambda: ActionValidation(cast(GameError, "error")),
         lambda: PlayerResult(UuidWithSecret(int=1), 0, 1),
         lambda: PlayerResult(ALICE, IntWithSecret(0), 1),
-        lambda: PlayerResult(ALICE, True, 1),  # type: ignore[arg-type]
+        lambda: PlayerResult(ALICE, True, 1),
         lambda: PlayerResult(ALICE, 0, 0),
         lambda: PlayerResult(ALICE, 0, IntWithSecret(1)),
     ],
