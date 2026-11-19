@@ -138,7 +138,7 @@ P2-03 整體尚未完成：GameEvent／GameResult 已於 P2-C 實作，Room／Ga
 - [x] PD-01 引擎、記憶體私人房間原型與前端（提交 `e0865def`）；分支 CI 通過。
 - [x] PD-02 唯讀審查：對照 D1 R01～R13 與補遺，未發現阻擋缺陷，建議通過（審查結論，非人工核准）。
 - [x] PD-03 補強整合測試與獨立牌型 oracle 測試、驗收報告 `docs/reports/PHASE_D.md`。
-- [ ] PD-04 人工驗收與合併（Draft PR #6；strict Mypy 目前不在 CI，見報告「已知限制」）。
+- [x] PD-04 人工驗收與合併：PR #6 已合併進 `main`（合併提交 `3ed49fc`）；`main` 上 CI run 44452518031 為 success。strict Mypy 目前不在 CI，見報告「已知限制」。
 
 Phase D 的規則為固定四人，與下方 Phase 4 的「2～4 人」描述不同。Phase 4 四項維持未勾選，
 是否改寫或由 Phase D 取代，須人工決定。
